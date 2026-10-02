@@ -35,5 +35,15 @@ services:
       redis:
         condition: service_healthy
 
+  web:
+    build:
+      context: ./web
+      args:
+        # The browser calls the API directly, so this is the host URL, not
+        # the compose service name. It is baked in at build time.
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports: ["3000:3000"]
+    depends_on: [api]
+
 volumes:
   pgdata:
