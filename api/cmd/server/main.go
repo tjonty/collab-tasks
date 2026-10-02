@@ -18,6 +18,7 @@ import (
 	"github.com/tjonty/collab-tasks/api/internal/config"
 	"github.com/tjonty/collab-tasks/api/internal/health"
 	"github.com/tjonty/collab-tasks/api/internal/httpapi"
+	"github.com/tjonty/collab-tasks/api/internal/store"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -35,13 +36,19 @@ func run() error {
 
 	cfg := config.FromEnv()
 
-	// pgxpool connects lazily, so an unreachable Postgres is not a startup
-	// error; only a malformed DATABASE_URL is.
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("postgres config: %w", err)
 	}
 	defer pool.Close()
+
+	// The schema must be current before any request runs, so an unreachable
+	// Postgres at startup is fatal. Compose starts the API only once
+	// Postgres is healthy.
+	if err := store.Migrate(ctx, pool); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	slog.Info("migrations applied")
 
 	rdb, err := newRedisClient(cfg.RedisURL)
 	if err != nil {
