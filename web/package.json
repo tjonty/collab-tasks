@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../contract/openapi.yaml -o src/lib/api/schema.d.ts"
+    "gen:api": "openapi-typescript ../contract/openapi.yaml -o src/lib/api/schema.d.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:demo": "E2E_DEMO=1 playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

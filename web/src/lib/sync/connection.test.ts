@@ -160,6 +160,24 @@ describe("Connection", () => {
     expect(statuses.at(-1)).toBe("reconnecting");
   });
 
+  test("going offline drops the socket at once, so coming back online is a fresh connection", () => {
+    // After Wi-Fi drops or the network changes, a socket can linger half dead
+    // without ever closing. Treat "offline" as the end of this socket.
+    const { conn, statuses, opened, goOffline, goOnline } = setup();
+    conn.start();
+    latest().accept();
+    const first = latest();
+    goOffline();
+    expect(first.readyState).toBe(3);
+    expect(statuses.at(-1)).toBe("offline");
+
+    goOnline();
+    expect(FakeSocket.all).toHaveLength(2);
+    latest().accept();
+    expect(opened).toHaveBeenCalledTimes(2); // the caller subscribes again from its last seq
+    expect(statuses.at(-1)).toBe("live");
+  });
+
   test("stop closes the socket for good", () => {
     const { conn } = setup();
     conn.start();

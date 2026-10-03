@@ -102,15 +102,30 @@ export class Connection {
       this.opts.onStatus("live");
       return;
     }
-    if (this.socket) return; // already reconnecting
+    // Reconnect now rather than waiting out the backoff; an attempt started
+    // while offline would only fail.
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    const stale = this.socket;
+    this.socket = null;
+    stale?.close();
+    this.attempt = 0;
     this.opts.onStatus("reconnecting");
     this.open();
   };
 
   private onOffline = (): void => {
-    if (!this.stopped) this.opts.onStatus("offline");
+    if (this.stopped) return;
+    // The socket is as good as dead, even if it hasn't noticed: after a Wi-Fi
+    // drop or a network change it can linger without ever closing. Drop it;
+    // onOnline reconnects, and the backoff keeps trying in case the browser
+    // was wrong about being offline.
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.reconnectLater();
   };
 
   private isOnline(): boolean {
