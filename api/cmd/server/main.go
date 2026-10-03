@@ -63,9 +63,18 @@ func run() error {
 		}),
 	}
 
+	handler := httpapi.NewRouter(httpapi.Config{
+		Checks:     checks,
+		CORSOrigin: cfg.CORSOrigin,
+		Pool:       pool,
+		// Real-time delivery (the Redis doorbell) comes later; until then
+		// accepted changes ring nothing.
+		Doorbell: nil,
+	})
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouter(checks, cfg.CORSOrigin),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

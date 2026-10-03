@@ -1,0 +1,442 @@
+openapi: 3.1.0
+info:
+  title: Collab Tasks API
+  version: 0.2.0
+  description: |
+    A real-time collaborative task manager.
+
+    Every write to a project is a typed *change* sent to
+    `POST /projects/{projectId}/changes`. The server applies each change in
+    one transaction and records it as one event, numbered by the project's
+    `seq`. Only creating a user or a project uses another endpoint.
+
+    There is no login: requests carry `X-User-Id`, the id returned by
+    `POST /users`. This identifies, it does not authenticate.
+
+    Generated code: `api/internal/apigen` (oapi-codegen) and
+    `web/src/lib/api/schema.d.ts` (openapi-typescript).
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /users:
+    post:
+      operationId: createUser
+      summary: Pick a display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201':
+          description: The new user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /projects:
+    post:
+      operationId: createProject
+      summary: Create a project
+      description: |
+        The client picks the id (UUIDv7), so a retried create returns the
+        project that already exists instead of making a second one.
+      security:
+        - userId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectRequest' }
+      responses:
+        '201':
+          description: The project, new or already created by an earlier attempt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /projects/{projectId}/changes:
+    post:
+      operationId: submitChange
+      summary: Apply one change to a project
+      description: |
+        Validates the change, checks it against the current state, applies it
+        and records one event, all in one transaction. Sending the same
+        `changeId` again is safe: it returns the original `seq` without
+        applying anything twice.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitChangeRequest' }
+      responses:
+        '200':
+          description: The change was applied (or had been, for a retry).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmitChangeResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    userId:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: The id returned by `POST /users`. Not a secret.
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: '`unknown_user`: `X-User-Id` is missing or names no user.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: '`project_not_found`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: |
+        The change breaks a rule given the current state. Nothing was applied
+        and no `seq` was used. Codes: `task_not_found`, `invalid_transition`,
+        `dependencies_not_done`, `dependency_cycle`, `limit_exceeded`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: '`validation_failed`: the request is malformed or breaks a field limit. `details.field` names the field.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unavailable:
+      description: '`unavailable`: the database is unreachable. Retrying with the same ids is safe.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        details: { $ref: '#/components/schemas/ErrorDetails' }
+
+    ErrorDetails:
+      type: object
+      properties:
+        field:
+          type: string
+          description: The offending field, e.g. `title`, `tags[2]` or `customFields.estimate`.
+
+    ErrorCode:
+      type: string
+      enum:
+        - validation_failed
+        - unknown_user
+        - project_not_found
+        - task_not_found
+        - invalid_transition
+        - dependencies_not_done
+        - dependency_cycle
+        - limit_exceeded
+        - unavailable
+        - internal
+
+    User:
+      type: object
+      required: [id, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+
+    CreateUserRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, description: '1–40 characters.' }
+
+    Project:
+      type: object
+      required: [id, name, description, metadata, seq]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        metadata: { $ref: '#/components/schemas/Metadata' }
+        seq:
+          type: integer
+          format: int64
+          description: The number of the project's latest event.
+
+    CreateProjectRequest:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid, description: 'A client-generated UUIDv7.' }
+        name: { type: string, description: '1–100 characters.' }
+        description: { type: string, description: 'Up to 2,000 characters.' }
+        metadata: { $ref: '#/components/schemas/Metadata' }
+
+    Metadata:
+      type: object
+      description: Free-form project metadata.
+      additionalProperties: true
+
+    MetadataPatch:
+      type: object
+      description: Keys to set on the project metadata. A `null` value removes the key.
+      additionalProperties: true
+
+    Status:
+      type: string
+      enum: [todo, in_progress, in_review, done]
+      description: |
+        Allowed moves: todo → in_progress; in_progress → todo | in_review | done;
+        in_review → in_progress | done; done → in_progress. Moving to done
+        requires every dependency to be done.
+
+    Priority:
+      type: string
+      enum: [low, medium, high, urgent]
+
+    CustomFieldValue:
+      description: A string (up to 500 characters), a number or a boolean.
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+      x-go-type: interface{}
+
+    CustomFields:
+      type: object
+      description: Up to 20 keys of 1–40 characters.
+      additionalProperties: { $ref: '#/components/schemas/CustomFieldValue' }
+
+    CustomFieldsPatch:
+      type: object
+      description: Keys to set. A `null` value removes the key.
+      additionalProperties:
+        oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: 'null'
+        x-go-type: interface{}
+
+    TaskCreateConfiguration:
+      type: object
+      properties:
+        priority: { $ref: '#/components/schemas/Priority' }
+        description: { type: string, description: 'Up to 10,000 characters.' }
+        tags:
+          type: array
+          items: { type: string }
+          description: Up to 20 distinct tags of 1–30 characters.
+        customFields: { $ref: '#/components/schemas/CustomFields' }
+
+    SubmitChangeRequest:
+      type: object
+      required: [changeId, change]
+      properties:
+        changeId:
+          type: string
+          format: uuid
+          description: A client-generated UUIDv7. Reusing it makes the request a safe retry.
+        change: { $ref: '#/components/schemas/Change' }
+
+    SubmitChangeResponse:
+      type: object
+      required: [seq]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          description: The seq of the event this change produced.
+
+    Change:
+      description: One write to a project, discriminated by `type`.
+      oneOf:
+        - $ref: '#/components/schemas/ProjectUpdate'
+        - $ref: '#/components/schemas/TaskCreate'
+        - $ref: '#/components/schemas/TaskUpdate'
+        - $ref: '#/components/schemas/TaskSetStatus'
+        - $ref: '#/components/schemas/TaskDelete'
+        - $ref: '#/components/schemas/TaskAddAssignee'
+        - $ref: '#/components/schemas/TaskRemoveAssignee'
+        - $ref: '#/components/schemas/TaskAddTag'
+        - $ref: '#/components/schemas/TaskRemoveTag'
+        - $ref: '#/components/schemas/TaskAddDependency'
+        - $ref: '#/components/schemas/TaskRemoveDependency'
+        - $ref: '#/components/schemas/CommentCreate'
+      discriminator:
+        propertyName: type
+        mapping:
+          project.update: '#/components/schemas/ProjectUpdate'
+          task.create: '#/components/schemas/TaskCreate'
+          task.update: '#/components/schemas/TaskUpdate'
+          task.setStatus: '#/components/schemas/TaskSetStatus'
+          task.delete: '#/components/schemas/TaskDelete'
+          task.addAssignee: '#/components/schemas/TaskAddAssignee'
+          task.removeAssignee: '#/components/schemas/TaskRemoveAssignee'
+          task.addTag: '#/components/schemas/TaskAddTag'
+          task.removeTag: '#/components/schemas/TaskRemoveTag'
+          task.addDependency: '#/components/schemas/TaskAddDependency'
+          task.removeDependency: '#/components/schemas/TaskRemoveDependency'
+          comment.create: '#/components/schemas/CommentCreate'
+
+    ProjectUpdate:
+      type: object
+      description: Changes only the fields sent. Metadata is merged per key.
+      required: [type]
+      properties:
+        type: { type: string }
+        name: { type: string }
+        description: { type: string }
+        metadata: { $ref: '#/components/schemas/MetadataPatch' }
+
+    TaskCreate:
+      type: object
+      description: Creates a task in `todo`.
+      required: [type, id, title]
+      properties:
+        type: { type: string }
+        id: { type: string, format: uuid, description: 'A client-generated UUIDv7.' }
+        title: { type: string, description: '1–200 characters.' }
+        configuration: { $ref: '#/components/schemas/TaskCreateConfiguration' }
+        assignedTo:
+          type: array
+          items: { type: string, format: uuid }
+        dependencies:
+          type: array
+          items: { type: string, format: uuid }
+          description: Ids of tasks in the same project that this task depends on.
+
+    TaskUpdate:
+      type: object
+      description: Changes only the fields sent. Custom fields are merged per key.
+      required: [type, taskId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        title: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        description: { type: string }
+        customFields: { $ref: '#/components/schemas/CustomFieldsPatch' }
+
+    TaskSetStatus:
+      type: object
+      required: [type, taskId, to]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        to: { $ref: '#/components/schemas/Status' }
+
+    TaskDelete:
+      type: object
+      description: Deletes the task, its comments and every dependency link to or from it.
+      required: [type, taskId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+
+    TaskAddAssignee:
+      type: object
+      required: [type, taskId, userId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+
+    TaskRemoveAssignee:
+      type: object
+      required: [type, taskId, userId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+
+    TaskAddTag:
+      type: object
+      required: [type, taskId, tag]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        tag: { type: string }
+
+    TaskRemoveTag:
+      type: object
+      required: [type, taskId, tag]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        tag: { type: string }
+
+    TaskAddDependency:
+      type: object
+      description: Makes `taskId` depend on `dependsOnId`. Rejected if it would create a cycle.
+      required: [type, taskId, dependsOnId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        dependsOnId: { type: string, format: uuid }
+
+    TaskRemoveDependency:
+      type: object
+      required: [type, taskId, dependsOnId]
+      properties:
+        type: { type: string }
+        taskId: { type: string, format: uuid }
+        dependsOnId: { type: string, format: uuid }
+
+    CommentCreate:
+      type: object
+      required: [type, id, taskId, content]
+      properties:
+        type: { type: string }
+        id: { type: string, format: uuid, description: 'A client-generated UUIDv7.' }
+        taskId: { type: string, format: uuid }
+        content: { type: string, description: '1–5,000 characters.' }
+
+    Event:
+      type: object
+      description: |
+        An accepted change, as recorded in the project's log and delivered to
+        every client.
+      required: [projectId, seq, changeId, actorId, createdAt, touches, change]
+      properties:
+        projectId: { type: string, format: uuid }
+        seq: { type: integer, format: int64 }
+        changeId: { type: string, format: uuid }
+        actorId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        touches:
+          type: array
+          items: { type: string, format: uuid }
+          description: |
+            Every task whose row this change wrote. Clients apply the event to
+            a task only if `seq` is greater than the task's `updatedSeq`.
+        change: { $ref: '#/components/schemas/Change' }

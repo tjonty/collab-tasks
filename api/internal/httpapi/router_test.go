@@ -34,7 +34,7 @@ func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
 
 func TestRouter_HealthzOK(t *testing.T) {
 	checks, _ := countingChecks()
-	rec := do(NewRouter(checks, origin), http.MethodGet, "/healthz")
+	rec := do(NewRouter(Config{Checks: checks, CORSOrigin: origin}), http.MethodGet, "/healthz")
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -49,7 +49,7 @@ func TestRouter_HealthzOK(t *testing.T) {
 
 func TestRouter_Preflight(t *testing.T) {
 	checks, calls := countingChecks()
-	rec := do(NewRouter(checks, origin), http.MethodOptions, "/healthz")
+	rec := do(NewRouter(Config{Checks: checks, CORSOrigin: origin}), http.MethodOptions, "/healthz")
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
@@ -57,7 +57,7 @@ func TestRouter_Preflight(t *testing.T) {
 	if got, want := rec.Header().Get("Access-Control-Allow-Methods"), "GET, POST, PATCH, DELETE, OPTIONS"; got != want {
 		t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, want)
 	}
-	if got, want := rec.Header().Get("Access-Control-Allow-Headers"), "Content-Type"; got != want {
+	if got, want := rec.Header().Get("Access-Control-Allow-Headers"), "Content-Type, X-User-Id"; got != want {
 		t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, want)
 	}
 	if rec.Body.Len() != 0 {
@@ -70,7 +70,7 @@ func TestRouter_Preflight(t *testing.T) {
 
 func TestRouter_WrongMethod(t *testing.T) {
 	checks, _ := countingChecks()
-	rec := do(NewRouter(checks, origin), http.MethodPost, "/healthz")
+	rec := do(NewRouter(Config{Checks: checks, CORSOrigin: origin}), http.MethodPost, "/healthz")
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
@@ -79,7 +79,7 @@ func TestRouter_WrongMethod(t *testing.T) {
 
 func TestRouter_UnknownPath(t *testing.T) {
 	checks, _ := countingChecks()
-	rec := do(NewRouter(checks, origin), http.MethodGet, "/nope")
+	rec := do(NewRouter(Config{Checks: checks, CORSOrigin: origin}), http.MethodGet, "/nope")
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)

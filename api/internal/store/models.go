@@ -119,6 +119,7 @@ type Event struct {
 	Payload   []byte
 	ActorID   uuid.UUID
 	CreatedAt pgtype.Timestamptz
+	Touches   []uuid.UUID
 }
 
 type Project struct {

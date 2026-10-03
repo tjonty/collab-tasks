@@ -2,65 +2,24 @@ package store
 
 import (
 	"context"
-	"errors"
-	"flag"
-	"fmt"
 	"io/fs"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/tjonty/collab-tasks/api/db"
+	"github.com/tjonty/collab-tasks/api/internal/testdb"
 )
 
 // pool points at one migrated Postgres container shared by every test in the
 // package. Tests use fresh random ids, so they don't see each other's rows.
 var pool *pgxpool.Pool
 
-func TestMain(m *testing.M) {
-	os.Exit(runMain(m))
-}
-
-func runMain(m *testing.M) int {
-	flag.Parse()
-	if testing.Short() {
-		fmt.Println("skipping store integration tests in -short mode")
-		return 0
-	}
-	ctx := context.Background()
-	ctr, err := postgres.Run(ctx, "postgres:17-alpine", postgres.BasicWaitStrategies())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "start postgres (is Docker running?):", err)
-		return 1
-	}
-	defer testcontainers.TerminateContainer(ctr)
-
-	dsn, err := ctr.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "connection string:", err)
-		return 1
-	}
-	pool, err = pgxpool.New(ctx, dsn)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "connect:", err)
-		return 1
-	}
-	defer pool.Close()
-
-	if err := Migrate(ctx, pool); err != nil {
-		fmt.Fprintln(os.Stderr, "migrate:", err)
-		return 1
-	}
-	return m.Run()
-}
+func TestMain(m *testing.M) { testdb.Main(m, &pool, Migrate) }
 
 // Postgres error codes the schema is expected to raise.
 const (
@@ -73,62 +32,35 @@ const (
 
 func exec(t *testing.T, sql string, args ...any) error {
 	t.Helper()
-	_, err := pool.Exec(context.Background(), sql, args...)
-	return err
+	return testdb.Exec(t, pool, sql, args...)
 }
 
 func mustExec(t *testing.T, sql string, args ...any) {
 	t.Helper()
-	if err := exec(t, sql, args...); err != nil {
-		t.Fatalf("%s: %v", sql, err)
-	}
-}
-
-func wantCode(t *testing.T, err error, code string) {
-	t.Helper()
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
-		t.Fatalf("err = %v, want Postgres error %s", err, code)
-	}
-	if pgErr.Code != code {
-		t.Fatalf("err = %s (%s), want %s", pgErr.Code, pgErr.Message, code)
-	}
-}
-
-func newUser(t *testing.T) uuid.UUID {
-	t.Helper()
-	id := uuid.Must(uuid.NewV7())
-	mustExec(t, `INSERT INTO users (id, display_name) VALUES ($1, 'Ana')`, id)
-	return id
-}
-
-func newProject(t *testing.T) uuid.UUID {
-	t.Helper()
-	id := uuid.Must(uuid.NewV7())
-	mustExec(t, `INSERT INTO projects (id, name) VALUES ($1, 'Launch')`, id)
-	return id
-}
-
-func newTask(t *testing.T, projectID uuid.UUID) uuid.UUID {
-	t.Helper()
-	id := uuid.Must(uuid.NewV7())
-	mustExec(t, `INSERT INTO tasks (id, project_id, title) VALUES ($1, $2, 'Task')`, id, projectID)
-	return id
-}
-
-func addDep(t *testing.T, projectID, taskID, dependsOnID uuid.UUID) error {
-	t.Helper()
-	return exec(t, `INSERT INTO task_dependencies (project_id, task_id, depends_on_id) VALUES ($1, $2, $3)`,
-		projectID, taskID, dependsOnID)
+	testdb.MustExec(t, pool, sql, args...)
 }
 
 func count(t *testing.T, sql string, args ...any) int {
 	t.Helper()
-	var n int
-	if err := pool.QueryRow(context.Background(), sql, args...).Scan(&n); err != nil {
-		t.Fatalf("%s: %v", sql, err)
-	}
-	return n
+	return testdb.Count(t, pool, sql, args...)
+}
+
+func wantCode(t *testing.T, err error, code string) {
+	t.Helper()
+	testdb.WantCode(t, err, code)
+}
+
+func newUser(t *testing.T) uuid.UUID    { t.Helper(); return testdb.User(t, pool) }
+func newProject(t *testing.T) uuid.UUID { t.Helper(); return testdb.Project(t, pool) }
+
+func newTask(t *testing.T, projectID uuid.UUID) uuid.UUID {
+	t.Helper()
+	return testdb.Task(t, pool, projectID)
+}
+
+func addDep(t *testing.T, projectID, taskID, dependsOnID uuid.UUID) error {
+	t.Helper()
+	return testdb.Dependency(t, pool, projectID, taskID, dependsOnID)
 }
 
 func TestMigrate_IsIdempotent(t *testing.T) {
@@ -320,7 +252,7 @@ func TestTaskDelete_Cascades(t *testing.T) {
 	}
 }
 
-func insertEvent(t *testing.T, projectID uuid.UUID, seq int64, changeID, actorID uuid.UUID) error {
+func logEvent(t *testing.T, projectID uuid.UUID, seq int64, changeID, actorID uuid.UUID) error {
 	t.Helper()
 	return exec(t, `INSERT INTO events (project_id, seq, change_id, type, entity_id, payload, actor_id)
 		VALUES ($1, $2, $3, 'task.create', $4, '{}', $5)`,
@@ -330,27 +262,52 @@ func insertEvent(t *testing.T, projectID uuid.UUID, seq int64, changeID, actorID
 func TestEvents_SeqAndChangeIDAreUnique(t *testing.T) {
 	p, user := newProject(t), newUser(t)
 	change := uuid.Must(uuid.NewV7())
-	if err := insertEvent(t, p, 1, change, user); err != nil {
+	if err := logEvent(t, p, 1, change, user); err != nil {
 		t.Fatal(err)
 	}
 	// A retried change can't be logged twice, even under another seq.
-	wantCode(t, insertEvent(t, p, 2, change, user), uniqueViolation)
+	wantCode(t, logEvent(t, p, 2, change, user), uniqueViolation)
 	// Two events can't share a seq within a project.
-	wantCode(t, insertEvent(t, p, 1, uuid.Must(uuid.NewV7()), user), uniqueViolation)
+	wantCode(t, logEvent(t, p, 1, uuid.Must(uuid.NewV7()), user), uniqueViolation)
 	// The same seq in another project is fine.
-	if err := insertEvent(t, newProject(t), 1, uuid.Must(uuid.NewV7()), user); err != nil {
+	if err := logEvent(t, newProject(t), 1, uuid.Must(uuid.NewV7()), user); err != nil {
 		t.Errorf("same seq in another project: %v", err)
 	}
 }
 
 func TestEvents_AreAppendOnly(t *testing.T) {
 	p, user := newProject(t), newUser(t)
-	if err := insertEvent(t, p, 1, uuid.Must(uuid.NewV7()), user); err != nil {
+	if err := logEvent(t, p, 1, uuid.Must(uuid.NewV7()), user); err != nil {
 		t.Fatal(err)
 	}
 	wantCode(t, exec(t, `UPDATE events SET type = 'x' WHERE project_id = $1`, p), raiseException)
 	wantCode(t, exec(t, `DELETE FROM events WHERE project_id = $1`, p), raiseException)
 	if n := count(t, `SELECT count(*) FROM events WHERE project_id = $1 AND type = 'task.create'`, p); n != 1 {
 		t.Errorf("events after update/delete = %d, want 1 unchanged", n)
+	}
+}
+
+func TestEvents_RecordTouchedTasks(t *testing.T) {
+	p, user := newProject(t), newUser(t)
+	touched := []uuid.UUID{uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())}
+	mustExec(t, `INSERT INTO events (project_id, seq, change_id, type, entity_id, payload, actor_id, touches)
+		VALUES ($1, 1, $2, 'task.delete', $3, '{}', $4, $5)`,
+		p, uuid.Must(uuid.NewV7()), touched[0], user, touched)
+
+	var got []uuid.UUID
+	if err := pool.QueryRow(context.Background(), `SELECT touches FROM events WHERE project_id = $1`, p).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != touched[0] || got[1] != touched[1] {
+		t.Errorf("touches = %v, want %v", got, touched)
+	}
+
+	// An event that touches no task (a comment, a project rename) stores an
+	// empty list, not NULL.
+	if err := logEvent(t, p, 2, uuid.Must(uuid.NewV7()), user); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, `SELECT cardinality(touches) FROM events WHERE project_id = $1 AND seq = 2`, p); n != 0 {
+		t.Errorf("default touches has %d items, want 0", n)
 	}
 }

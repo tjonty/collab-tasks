@@ -118,22 +118,34 @@ func ValidateCustomFields(fields map[string]any) error {
 		return invalid("customFields", "has %d keys, max %d", len(fields), MaxCustomFields)
 	}
 	for key, value := range fields {
-		if key == "" {
-			return invalid("customFields", "has an empty key")
+		if err := validateCustomFieldKey(key); err != nil {
+			return err
 		}
-		field := "customFields." + key
-		if n := utf8.RuneCountInString(key); n > MaxCustomFieldKey {
-			return invalid(field, "key is %d characters, max %d", n, MaxCustomFieldKey)
-		}
-		switch v := value.(type) {
-		case string:
-			if err := optional(field, v, MaxCustomFieldString); err != nil {
-				return err
-			}
-		case float64, json.Number, bool:
-		default:
-			return invalid(field, "must be a string, number or boolean")
+		if err := validateCustomFieldValue(key, value); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func validateCustomFieldKey(key string) error {
+	if key == "" {
+		return invalid("customFields", "has an empty key")
+	}
+	if n := utf8.RuneCountInString(key); n > MaxCustomFieldKey {
+		return invalid("customFields."+key, "key is %d characters, max %d", n, MaxCustomFieldKey)
+	}
+	return nil
+}
+
+func validateCustomFieldValue(key string, value any) error {
+	field := "customFields." + key
+	switch v := value.(type) {
+	case string:
+		return optional(field, v, MaxCustomFieldString)
+	case float64, json.Number, bool:
+		return nil
+	default:
+		return invalid(field, "must be a string, number or boolean")
+	}
 }

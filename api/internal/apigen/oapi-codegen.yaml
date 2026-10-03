@@ -1,0 +1,8 @@
+# Generates api.gen.go from contract/openapi.yaml. Run `go generate ./...`
+# from api/ after changing the contract; the output is committed.
+package: apigen
+output: api.gen.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
