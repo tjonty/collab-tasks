@@ -1,0 +1,181 @@
+ANALYZE
+The project the plans run on:
+ tasks  | comments | events | dependencies 
+--------+----------+--------+--------------
+ 10,000 | 1,500    | 21,560 | 3,641
+(1 row)
+
+== ListTaskSummaries: the first page, then a page from the middle
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..4391.36 rows=500 width=131) (actual time=0.045..0.632 rows=500 loops=1)
+   Buffers: shared hit=1180
+   ->  Index Scan using tasks_project_id_id_key on tasks t  (cost=0.41..87617.34 rows=9977 width=131) (actual time=0.044..0.603 rows=500 loops=1)
+         Index Cond: ((project_id = '01a0ff8a-8015-73f2-9602-eae4f00a67d1'::uuid) AND (id > '00000000-0000-0000-0000-000000000000'::uuid))
+         Buffers: shared hit=1180
+         SubPlan 1
+           ->  Index Only Scan using task_dependencies_pkey on task_dependencies d  (cost=0.28..8.30 rows=1 width=16) (actual time=0.001..0.001 rows=0 loops=500)
+                 Index Cond: (task_id = t.id)
+                 Heap Fetches: 96
+                 Buffers: shared hit=1065
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.207 ms
+ Execution Time: 0.691 ms
+(14 rows)
+
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..4428.90 rows=500 width=131) (actual time=0.035..1.047 rows=500 loops=1)
+   Buffers: shared hit=1096
+   ->  Index Scan using tasks_project_id_id_key on tasks t  (cost=0.41..74664.69 rows=8430 width=131) (actual time=0.035..1.018 rows=500 loops=1)
+         Index Cond: ((project_id = '01a0ff8a-8015-73f2-9602-eae4f00a67d1'::uuid) AND (id > '01a0ff8a-801d-7b5c-a790-9fdbbf64bca6'::uuid))
+         Buffers: shared hit=1096
+         SubPlan 1
+           ->  Index Only Scan using task_dependencies_pkey on task_dependencies d  (cost=0.28..8.30 rows=1 width=16) (actual time=0.001..0.001 rows=0 loops=500)
+                 Index Cond: (task_id = t.id)
+                 Heap Fetches: 0
+                 Buffers: shared hit=1001
+ Planning Time: 0.058 ms
+ Execution Time: 1.092 ms
+(12 rows)
+
+== ListEvents: 1,000 events from the middle of the log
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..2793.72 rows=1000 width=234) (actual time=0.193..0.572 rows=1000 loops=1)
+   Buffers: shared hit=52
+   ->  Index Scan using events_pkey on events  (cost=0.42..14173.62 rows=5074 width=234) (actual time=0.193..0.518 rows=1000 loops=1)
+         Index Cond: ((project_id = '01a0ff8a-8015-73f2-9602-eae4f00a67d1'::uuid) AND (seq > 10780))
+         Buffers: shared hit=52
+ Planning:
+   Buffers: shared hit=26
+ Planning Time: 0.158 ms
+ Execution Time: 0.617 ms
+(9 rows)
+
+== ListComments: the longest thread
+                                                                 QUERY PLAN                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=22.67..22.68 rows=5 width=86) (actual time=0.038..0.039 rows=3 loops=1)
+   Buffers: shared hit=5
+   ->  Sort  (cost=22.67..22.68 rows=5 width=86) (actual time=0.038..0.038 rows=3 loops=1)
+         Sort Key: seq
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=5
+         ->  Bitmap Heap Scan on comments  (cost=4.34..22.61 rows=5 width=86) (actual time=0.027..0.029 rows=3 loops=1)
+               Recheck Cond: ((task_id = '01a0ff8a-801a-7bbe-8bf1-299308981897'::uuid) AND (seq > 0))
+               Heap Blocks: exact=3
+               Buffers: shared hit=5
+               ->  Bitmap Index Scan on comments_task_id_seq_idx  (cost=0.00..4.34 rows=5 width=0) (actual time=0.023..0.023 rows=3 loops=1)
+                     Index Cond: ((task_id = '01a0ff8a-801a-7bbe-8bf1-299308981897'::uuid) AND (seq > 0))
+                     Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=17
+ Planning Time: 0.086 ms
+ Execution Time: 0.064 ms
+(17 rows)
+
+== GetTaskDetail
+                                                                        QUERY PLAN                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using tasks_pkey on tasks t  (cost=0.29..16.60 rows=1 width=258) (actual time=0.027..0.027 rows=1 loops=1)
+   Index Cond: (id = '01a0ff8a-801d-7b5c-a790-9fdbbf64bca6'::uuid)
+   Buffers: shared hit=5
+   SubPlan 1
+     ->  Index Only Scan using task_dependencies_pkey on task_dependencies d  (cost=0.28..8.30 rows=1 width=16) (actual time=0.006..0.006 rows=0 loops=1)
+           Index Cond: (task_id = t.id)
+           Heap Fetches: 0
+           Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.106 ms
+ Execution Time: 0.044 ms
+(12 rows)
+
+== DependencyStatuses: the task with the most dependencies
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.57..24.93 rows=2 width=4) (actual time=0.015..0.017 rows=2 loops=1)
+   Buffers: shared hit=10
+   ->  Index Only Scan using task_dependencies_pkey on task_dependencies d  (cost=0.28..8.31 rows=2 width=16) (actual time=0.005..0.006 rows=2 loops=1)
+         Index Cond: (task_id = '01a0ff8a-801a-7b3e-a724-29c8ea37034b'::uuid)
+         Heap Fetches: 2
+         Buffers: shared hit=4
+   ->  Index Scan using tasks_pkey on tasks t  (cost=0.29..8.31 rows=1 width=20) (actual time=0.005..0.005 rows=1 loops=2)
+         Index Cond: (id = d.depends_on_id)
+         Buffers: shared hit=6
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.389 ms
+ Execution Time: 0.034 ms
+(13 rows)
+
+== DependentIDs: the most depended-on task
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=8.52..8.53 rows=5 width=16) (actual time=0.032..0.032 rows=5 loops=1)
+   Sort Key: task_id
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared hit=3
+   ->  Index Scan using task_dependencies_depends_on_id_idx on task_dependencies  (cost=0.28..8.46 rows=5 width=16) (actual time=0.023..0.024 rows=5 loops=1)
+         Index Cond: (depends_on_id = '01a0ff8a-801b-7c33-9f2d-721505beca86'::uuid)
+         Buffers: shared hit=3
+ Planning Time: 0.063 ms
+ Execution Time: 0.046 ms
+(9 rows)
+
+== DependencyWouldCycle: from the newest task with dependencies to the oldest task
+                                                                               QUERY PLAN                                                                               
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=445.96..445.97 rows=1 width=1) (actual time=0.039..0.040 rows=1 loops=1)
+   Buffers: shared hit=18
+   CTE upstream
+     ->  Recursive Union  (cost=0.28..442.56 rows=151 width=16) (actual time=0.010..0.037 rows=6 loops=1)
+           Buffers: shared hit=18
+           ->  Index Only Scan using task_dependencies_pkey on task_dependencies d  (cost=0.28..8.30 rows=1 width=16) (actual time=0.010..0.010 rows=2 loops=1)
+                 Index Cond: (task_id = '01a0ff8a-8020-7b15-b6f5-af69a8d787f7'::uuid)
+                 Heap Fetches: 2
+                 Buffers: shared hit=4
+           ->  Nested Loop  (cost=0.28..43.28 rows=15 width=16) (actual time=0.007..0.008 rows=1 loops=3)
+                 Buffers: shared hit=14
+                 ->  WorkTable Scan on upstream u  (cost=0.00..0.20 rows=10 width=16) (actual time=0.000..0.000 rows=2 loops=3)
+                 ->  Index Only Scan using task_dependencies_pkey on task_dependencies d_1  (cost=0.28..4.30 rows=1 width=32) (actual time=0.003..0.004 rows=1 loops=6)
+                       Index Cond: (task_id = u.id)
+                       Heap Fetches: 1
+                       Buffers: shared hit=14
+   InitPlan 2
+     ->  CTE Scan on upstream  (cost=0.00..3.40 rows=1 width=0) (actual time=0.039..0.039 rows=0 loops=1)
+           Filter: (id = '01a0ff8a-801a-7b0d-ae83-ebee6232d608'::uuid)
+           Rows Removed by Filter: 6
+           Buffers: shared hit=18
+ Planning Time: 0.094 ms
+ Execution Time: 0.119 ms
+(23 rows)
+
+== EventByChangeID
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using events_change_id_key on events  (cost=0.42..8.44 rows=1 width=24) (actual time=0.048..0.048 rows=1 loops=1)
+   Index Cond: (change_id = '01a0ff8a-c906-76a3-9428-52a4c4c3b998'::uuid)
+   Buffers: shared hit=4
+ Planning Time: 0.016 ms
+ Execution Time: 0.060 ms
+(5 rows)
+
+== NextProjectSeq: inside a transaction that is rolled back
+BEGIN
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Update on projects  (cost=0.14..8.16 rows=1 width=14) (actual time=0.225..0.226 rows=1 loops=1)
+   Buffers: shared hit=25
+   ->  Index Scan using projects_pkey on projects  (cost=0.14..8.16 rows=1 width=14) (actual time=0.006..0.007 rows=1 loops=1)
+         Index Cond: (id = '01a0ff8a-8015-73f2-9602-eae4f00a67d1'::uuid)
+         Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.031 ms
+ Execution Time: 0.294 ms
+(9 rows)
+
+ROLLBACK
