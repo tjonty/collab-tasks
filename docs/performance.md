@@ -89,7 +89,7 @@ Opening a project loads every task summary, page by page, gzipped, as the web ap
 
 **Why these indexes:**
 - **Matched to the queries:** each index leads with exactly the columns its query filters and orders by.
-- **Keyset paging:** task pages (`id > cursor`) and the event log (`seq > n`) never use `OFFSET`, so a page from the middle costs the same as the first.
+- **Keyset paging:** task pages (`id > cursor`) and the event log (`seq > n`) never use `OFFSET`, so a page deep into the project is still one index range scan, not a walk past every row before it.
 - **Free ordering:** the events primary key is also the log's order, so catching up is one range scan.
 
 **The data is modest per task:** the longest thread has 3 comments, and the cycle walk visits 6 rows. So these times show each access path more than worst-case sizes. What scales is the path itself: each query is an index lookup whose cost grows with the rows it returns, not with the size of the project.

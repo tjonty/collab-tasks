@@ -1,5 +1,7 @@
 # Collab Tasks
 
+[![CI](https://github.com/tjonty/collab-tasks/actions/workflows/ci.yml/badge.svg)](https://github.com/tjonty/collab-tasks/actions/workflows/ci.yml)
+
 A real-time collaborative task manager: projects, tasks with dependencies and a status workflow, and comment threads. Every open tab sees each change within a second. A Go API and a Next.js web app, backed by Postgres and Redis, with no managed real-time database.
 
 ## Quick start
@@ -19,6 +21,7 @@ This starts Postgres, Redis, the API and the web app. Then open:
 
 - Web: http://localhost:3000. Pick a display name, then create or open a project. Each browser tab can be a different person. The System / Light / Dark switch in the header sets the theme for the whole browser.
 - API: http://localhost:8080/healthz. It returns `{"postgres":"ok","redis":"ok"}` with 200, or 503 if either dependency is down.
+- API docs: http://localhost:8080/docs, a browsable page for the contract (the raw spec is at `/openapi.json`).
 
 ### Seed a demo project
 
@@ -71,10 +74,20 @@ The API reads `PORT`, `DATABASE_URL`, `REDIS_URL` and `CORS_ORIGIN`. Their defau
 ```sh
 cd api && go test ./...      # unit and integration tests (Docker must be running; -short skips the Docker ones)
 cd web && npm test           # Vitest: the sync engine, the task rules and the UI components
-cd web && npm run test:e2e   # Playwright: two people, two browsers, against the running stack
+cd web && npm run test:e2e   # Playwright: two people in two browsers, and the theme switch, against the running stack
 ```
 
 `npm run test:e2e:demo` runs the end-to-end test in visible, slowed-down browsers and records a video of each in `web/test-results/`. It doubles as the demo script.
+
+CI runs all of these on every push and pull request, and also checks that the generated code is up to date ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+The load tests use [k6](https://k6.io) against the running stack. [docs/performance.md](docs/performance.md) has their results, the index strategy, and how to rerun everything:
+
+```sh
+k6 run loadtest/writes.js                            # write throughput: one project vs 20
+k6 run loadtest/fanout.js                            # 200 people watching one project (macOS: ulimit -n 4096 first)
+k6 run -e PROJECT_ID=<id> loadtest/initial-load.js   # opening a seeded 10,000-task project
+```
 
 ## Try it
 
@@ -153,11 +166,33 @@ cd web && npm run test:e2e   # Playwright: two people, two browsers, against the
 - As instances multiply, move from each one subscribing to every project (`PSUBSCRIBE project:*`) to per-project subscriptions or NATS subjects, so an instance only hears about the projects its clients have open.
 - Serve the event reads from a Postgres read replica.
 
+## Extended challenges
+
+The brief asks for at least one extended challenge. This project takes on two.
+
+**Option 3, Developer Experience:**
+- **Tests:** unit tests, integration tests against real Postgres and Redis (testcontainers), and end-to-end tests with two people in two browsers. See [Tests](#tests).
+- **CI/CD:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request:
+  - `go`: format check, generated code up to date, `go vet`, and every Go test with the race detector
+  - `web`: generated API types up to date, lint, typecheck, unit tests, and a production build
+  - `e2e`: the whole stack in Docker, a seed smoke test, and the Playwright tests
+  - `publish`: on `main`, pushes the API and web images to GHCR. They're built for running locally: the web image calls the API at `http://localhost:8080`.
+- **API documentation:** the OpenAPI 3.1 contract, [`contract/openapi.yaml`](contract/openapi.yaml), generates the Go server types and the TypeScript types. The API serves it at `/openapi.json`, and http://localhost:8080/docs is a Swagger page for browsing and trying it.
+- **Migrations and seeding:** goose migrations run when the API starts, and `docker compose exec api /seed` creates a 10,000-task demo project through the real write pipeline.
+
+**Option 1, Performance & Scale:**
+- **Virtual scrolling:** TanStack Virtual mounts only the rows on screen plus a few either side, about 40 of the 10,000.
+- **Cursor pagination:** task pages and the event log use keyset paging (`id > cursor`, `seq > n`), never `OFFSET`.
+- **Index strategy and load tests:** [docs/performance.md](docs/performance.md). Every hot query is served by an index. Headlines, from one API instance on a laptop:
+  - **Writes:** 482.7 changes a second on one project, and 899.1 spread over 20 projects.
+  - **Real time:** 200 listeners got 89,400 deliveries with no gaps, and delivery p95 was 89.0 ms. The recorded run missed its p99 target; the write-up explains why.
+  - **Opening the 10,000-task project:** p95 502.0 ms, with 393,233 bytes on the wire instead of 2,586,735.
+
 ## Code map
 
 | Path | What's there |
 | ---- | ------------ |
-| `contract/openapi.yaml` | The API contract, including the WebSocket messages. The Go server types and the TypeScript types are generated from it. |
+| `contract/openapi.yaml` | The API contract, including the WebSocket messages. The Go server types and the TypeScript types are generated from it. The API serves it at `/openapi.json`, browsable at `/docs`. |
 | `api/internal/domain` | The status workflow, the Done rule and field limits, in pure Go |
 | `api/internal/changes` | The write pipeline: one change, one transaction, one event |
 | `api/internal/httpapi` | The HTTP handlers, plus identity, CORS and gzip |
@@ -167,4 +202,7 @@ cd web && npm run test:e2e   # Playwright: two people, two browsers, against the
 | `web/src/lib/sync` | The client sync engine: the store, applying events, the WebSocket connection and sending changes |
 | `web/src/lib/domain` | The workflow rules, mirrored from Go so the UI can explain them |
 | `web/src/components` | The UI |
-| `web/e2e` | The two-person Playwright test |
+| `web/e2e` | The Playwright tests: two people in two browsers, and the theme switch |
+| `.github/workflows/ci.yml` | CI: the Go, web and end-to-end checks on every push and pull request, and publishing the images from `main` |
+| `loadtest/` | The k6 load tests, the query-plan script, and their recorded results |
+| `docs/performance.md` | Load-test results and the index strategy |
