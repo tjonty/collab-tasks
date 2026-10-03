@@ -80,6 +80,8 @@ export interface SyncMeta {
 
 type Listener = () => void;
 
+const RESUBSCRIBE_DELAY = 1_000;
+
 const nextFrame = (fn: () => void) =>
   typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => fn()) : setTimeout(fn, 16);
 
@@ -303,6 +305,9 @@ export class ProjectSync {
         return;
       case "error":
         if (msg.code === "project_not_found") this.setMeta({ error: msg.message });
+        // The server couldn't read the log for our subscribe (its database is
+        // unreachable): ask again until it can.
+        if (msg.code === "unavailable") setTimeout(() => this.subscribe(), RESUBSCRIBE_DELAY);
         return;
     }
   }

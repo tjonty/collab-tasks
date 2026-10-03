@@ -178,6 +178,20 @@ describe("Connection", () => {
     expect(statuses.at(-1)).toBe("live");
   });
 
+  test("an error from the server is logged and handed on; the connection stays open", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { conn, messages } = setup();
+    conn.start();
+    latest().accept();
+    const error: WsServerMessage = { type: "error", code: "validation_failed", message: "projectId is required" };
+    latest().push(error);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0].join(" ")).toContain("validation_failed: projectId is required");
+    expect(messages).toEqual([error]);
+    expect(latest().readyState).toBe(1);
+    warn.mockRestore();
+  });
+
   test("stop closes the socket for good", () => {
     const { conn } = setup();
     conn.start();

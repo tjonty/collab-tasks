@@ -3,37 +3,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 
-import type { Change, Priority, User } from "@/lib/api/types";
+import type { Change, Priority } from "@/lib/api/types";
 import { dependentsOf } from "@/lib/domain/workflow";
 import { useTask, useTaskList, useThread, usePending } from "@/lib/sync/hooks";
 import type { ProjectSync } from "@/lib/sync/store";
 import { parseFieldValue, pendingFields, waitingOn } from "@/lib/sync/view";
 import { PRIORITIES, PRIORITY_LABEL, STATUS_LABEL } from "@/lib/ui/labels";
+import { useUsers } from "@/lib/users";
 
 import { DeleteTaskButton } from "./delete-task-button";
 import { DependencyPicker } from "./dependency-picker";
 import { EditableText } from "./editable-text";
+import { useSession } from "./session";
 import { StatusSelect } from "./status-select";
 
 /** One task, every field editable, with its live comment thread. */
-export function TaskDrawer({
-  sync,
-  taskId,
-  users,
-  onClose,
-}: {
-  sync: ProjectSync;
-  taskId: string;
-  users: User[];
-  onClose: () => void;
-}) {
+export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskId: string; onClose: () => void }) {
+  const { api } = useSession();
   const task = useTask(sync, taskId);
   const thread = useThread(sync, taskId);
   const pending = usePending(sync);
   const list = useTaskList(sync);
   const lookup = useMemo(() => new Map(list.map((t) => [t.id, t])), [list]);
   const saving = useMemo(() => pendingFields(pending, taskId), [pending, taskId]);
-  const userName = (id: string) => users.find((u) => u.id === id)?.displayName ?? "Someone";
+  const people = useMemo(() => [...(task?.assignedTo ?? []), ...(thread ?? []).map((c) => c.author)], [task?.assignedTo, thread]);
+  const { list: users, nameOf: userName } = useUsers(api, people);
 
   useEffect(() => {
     void sync.openTask(taskId);

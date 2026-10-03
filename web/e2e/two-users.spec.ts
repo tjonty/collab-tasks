@@ -52,6 +52,10 @@ test("two people work on one project in real time", async ({ browser }) => {
     await raj.page.getByLabel("New comment").fill("I'll take this one.");
     await raj.page.getByRole("button", { name: "Comment" }).click();
     await expect(drawer(ana.page).getByText("I'll take this one.")).toBeVisible({ timeout: 2_000 });
+    // Raj joined after Ana's tab loaded the people list; the comment is still his.
+    await expect(drawer(ana.page).getByRole("listitem").filter({ hasText: "I'll take this one." })).toContainText("Raj", {
+      timeout: 2_000,
+    });
   });
 
   await test.step("Done is disabled for Ana while a dependency is still open", async () => {

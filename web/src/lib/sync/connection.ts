@@ -76,6 +76,8 @@ export class Connection {
       } catch {
         return;
       }
+      // The server couldn't act on something we sent; the connection stays open.
+      if (msg.type === "error") console.warn(`WebSocket error from the server: ${msg.code}: ${msg.message}`);
       this.opts.onMessage(msg);
     };
     socket.onclose = () => {

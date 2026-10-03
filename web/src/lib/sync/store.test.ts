@@ -139,6 +139,26 @@ describe("ProjectSync", () => {
     expect(ws.sent).toEqual([{ type: "subscribe", projectId: PROJECT, fromSeq: 3 }]);
   });
 
+  test("a subscribe the server couldn't serve yet (its database is down) is sent again", async () => {
+    vi.useFakeTimers();
+    try {
+      const { api, ws, sync } = setup();
+      api.projects = [project(5)];
+      api.pages = [{ tasks: [], nextCursor: null, seq: 5 }];
+      await sync.start();
+      ws.open();
+      ws.push({ type: "error", code: "unavailable", message: "the database is unreachable; subscribe again" });
+      expect(ws.sent).toHaveLength(1);
+      vi.advanceTimersByTime(1_000);
+      expect(ws.sent).toEqual([
+        { type: "subscribe", projectId: PROJECT, fromSeq: 5 },
+        { type: "subscribe", projectId: PROJECT, fromSeq: 5 },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("resync reloads the project from scratch", async () => {
     const { api, ws, sync } = setup();
     api.projects = [project(2), project(9000, "Reloaded")];

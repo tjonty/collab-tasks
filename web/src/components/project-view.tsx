@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -14,6 +13,7 @@ import { usePending, useSyncMeta, useTaskList } from "@/lib/sync/hooks";
 import { ProjectSync } from "@/lib/sync/store";
 import { emptyFilters, rejectionMessage, visibleTasks, type Filters, type SortKey } from "@/lib/sync/view";
 import { STATUSES, STATUS_LABEL } from "@/lib/ui/labels";
+import { useUsers } from "@/lib/users";
 
 import { ConnectionBadge } from "./connection-badge";
 import { EditableText } from "./editable-text";
@@ -43,16 +43,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const meta = useSyncMeta(sync);
   const tasks = useTaskList(sync);
   const pending = usePending(sync);
-  const users = useQuery({
-    queryKey: ["users"],
-    queryFn: async () => (await api.GET("/users")).data ?? [],
-    refetchInterval: 30_000,
-  });
-  const userList = useMemo(() => users.data ?? [], [users.data]);
-  const userName = useCallback(
-    (id: string) => userList.find((u) => u.id === id)?.displayName ?? "Someone",
-    [userList],
-  );
+  const assignees = useMemo(() => [...new Set(tasks.flatMap((t) => t.assignedTo))], [tasks]);
+  const { list: userList, nameOf: userName } = useUsers(api, assignees);
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<SortKey>("created");
@@ -221,7 +213,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
       <div className="flex min-h-0 flex-1">
         <TaskList tasks={visible} lookup={lookup} saving={saving} userName={userName} onOpen={open} />
-        {openTaskId && <TaskDrawer key={openTaskId} sync={sync} taskId={openTaskId} users={userList} onClose={close} />}
+        {openTaskId && <TaskDrawer key={openTaskId} sync={sync} taskId={openTaskId} onClose={close} />}
       </div>
     </main>
   );
