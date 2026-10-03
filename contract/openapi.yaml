@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Collab Tasks API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     A real-time collaborative task manager.
 
@@ -18,6 +18,25 @@ info:
     There is no login: every request except `POST /users` carries
     `X-User-Id`, the id returned by `POST /users`. This identifies, it does
     not authenticate.
+
+    ## Live updates: `GET /ws?userId={userId}`
+
+    A WebSocket (not an OpenAPI path). Every message is JSON with a `type`:
+    the client sends `WsClientMessage`s and receives `WsServerMessage`s.
+
+    - `subscribe {projectId, fromSeq}` replays every event after `fromSeq`,
+      sends `caughtUp {seq}`, then streams live events: no gaps, no
+      duplicates. A connection follows one project at a time. If `fromSeq`
+      is more than 5,000 events behind, or past the end of the log, the
+      server sends `resync` and the client reloads the project.
+    - `subscribeProjects {}` streams `projectsChanged` when a project is
+      created or renamed.
+    - A malformed message gets `error`; the connection stays open.
+
+    The server pings every 20 s and drops a connection that doesn't answer
+    within 10 s. A client that can't keep up (256 queued messages) is closed
+    with code 4008; on shutdown the server closes with 1001. Either way the
+    client reconnects and subscribes from the last `seq` it applied.
 
     Generated code: `api/internal/apigen` (oapi-codegen) and
     `web/src/lib/api/schema.d.ts` (openapi-typescript).
@@ -738,3 +757,113 @@ components:
             Every task whose row this change wrote. Clients apply the event to
             a task only if `seq` is greater than the task's `updatedSeq`.
         change: { $ref: '#/components/schemas/Change' }
+
+    WsClientMessage:
+      description: A message from client to server over `/ws`.
+      oneOf:
+        - $ref: '#/components/schemas/WsSubscribe'
+        - $ref: '#/components/schemas/WsUnsubscribe'
+        - $ref: '#/components/schemas/WsSubscribeProjects'
+      discriminator:
+        propertyName: type
+        mapping:
+          subscribe: '#/components/schemas/WsSubscribe'
+          unsubscribe: '#/components/schemas/WsUnsubscribe'
+          subscribeProjects: '#/components/schemas/WsSubscribeProjects'
+
+    WsSubscribe:
+      type: object
+      description: Follow a project, starting after `fromSeq`. Replaces any project followed before.
+      required: [type, projectId, fromSeq]
+      properties:
+        type: { type: string }
+        projectId: { type: string, format: uuid }
+        fromSeq:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The last `seq` the client has applied; 0 for none.
+
+    WsUnsubscribe:
+      type: object
+      required: [type, projectId]
+      properties:
+        type: { type: string }
+        projectId: { type: string, format: uuid }
+
+    WsSubscribeProjects:
+      type: object
+      description: Follow the project list.
+      required: [type]
+      properties:
+        type: { type: string }
+
+    WsServerMessage:
+      description: A message from server to client over `/ws`.
+      oneOf:
+        - $ref: '#/components/schemas/WsEvent'
+        - $ref: '#/components/schemas/WsCaughtUp'
+        - $ref: '#/components/schemas/WsProjectsChanged'
+        - $ref: '#/components/schemas/WsResync'
+        - $ref: '#/components/schemas/WsError'
+      discriminator:
+        propertyName: type
+        mapping:
+          event: '#/components/schemas/WsEvent'
+          caughtUp: '#/components/schemas/WsCaughtUp'
+          projectsChanged: '#/components/schemas/WsProjectsChanged'
+          resync: '#/components/schemas/WsResync'
+          error: '#/components/schemas/WsError'
+
+    WsEvent:
+      type: object
+      description: One event of the followed project, in `seq` order.
+      required: [type, projectId, event]
+      properties:
+        type: { type: string }
+        projectId: { type: string, format: uuid }
+        event: { $ref: '#/components/schemas/Event' }
+
+    WsCaughtUp:
+      type: object
+      description: The replay is done; events after `seq` arrive live.
+      required: [type, projectId, seq]
+      properties:
+        type: { type: string }
+        projectId: { type: string, format: uuid }
+        seq: { type: integer, format: int64 }
+
+    WsProjectsChanged:
+      type: object
+      description: A project was created or renamed.
+      required: [type, project]
+      properties:
+        type: { type: string }
+        project: { $ref: '#/components/schemas/ProjectSummary' }
+
+    WsResync:
+      type: object
+      description: |
+        Replaying from `fromSeq` isn't possible: reload the project with
+        `GET /projects/{projectId}` and subscribe again from its `seq`.
+      required: [type, projectId, reason]
+      properties:
+        type: { type: string }
+        projectId: { type: string, format: uuid }
+        reason: { $ref: '#/components/schemas/WsResyncReason' }
+
+    WsResyncReason:
+      type: string
+      description: |
+        `too_far_behind`: more than 5,000 events to replay.
+        `unknown_seq`: `fromSeq` is past the end of the log, e.g. after the database was reset.
+      enum: [too_far_behind, unknown_seq]
+
+    WsError:
+      type: object
+      description: The client sent a message the server can't act on. The connection stays open.
+      required: [type, code, message]
+      properties:
+        type: { type: string }
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }

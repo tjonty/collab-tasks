@@ -17,9 +17,10 @@ import (
 // instead of error responses, and respondError turns them into
 // {code, message}; the exception is a read's 404, which is a typed response.
 type server struct {
-	pool    *pgxpool.Pool
-	q       *store.Queries
-	changes *changes.Service
+	pool     *pgxpool.Pool
+	q        *store.Queries
+	changes  *changes.Service
+	doorbell changes.Doorbell // may be nil
 }
 
 var _ apigen.StrictServerInterface = (*server)(nil)
@@ -69,6 +70,9 @@ func (s *server) CreateProject(ctx context.Context, req apigen.CreateProjectRequ
 	}
 	// Read back rather than echo the request: a retry gets the project as
 	// it was first created.
+	if s.doorbell != nil {
+		s.doorbell.ProjectChanged(b.Id)
+	}
 	row, err := s.q.GetProject(ctx, b.Id)
 	if err != nil {
 		return nil, err

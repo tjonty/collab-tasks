@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 // Main starts a Postgres container, applies migrate, points *pool at it and
@@ -130,4 +131,24 @@ func Dependency(t *testing.T, pool *pgxpool.Pool, projectID, taskID, dependsOnID
 	t.Helper()
 	return Exec(t, pool, `INSERT INTO task_dependencies (project_id, task_id, depends_on_id) VALUES ($1, $2, $3)`,
 		projectID, taskID, dependsOnID)
+}
+
+// Redis starts a throwaway Redis for one test and returns its URL. The
+// test is skipped in -short mode.
+func Redis(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("needs Docker")
+	}
+	ctx := context.Background()
+	ctr, err := tcredis.Run(ctx, "redis:8-alpine")
+	if err != nil {
+		t.Fatalf("start redis (is Docker running?): %v", err)
+	}
+	t.Cleanup(func() { testcontainers.TerminateContainer(ctr) })
+	url, err := ctr.ConnectionString(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return url
 }

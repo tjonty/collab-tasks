@@ -30,8 +30,9 @@ type ring struct {
 
 // bell records every ring, standing in for the Redis doorbell.
 type bell struct {
-	mu    sync.Mutex
-	rings []ring
+	mu       sync.Mutex
+	rings    []ring
+	projects []uuid.UUID
 }
 
 func (b *bell) Ring(projectID uuid.UUID, seq int64) {
@@ -40,10 +41,22 @@ func (b *bell) Ring(projectID uuid.UUID, seq int64) {
 	b.rings = append(b.rings, ring{projectID, seq})
 }
 
+func (b *bell) ProjectChanged(projectID uuid.UUID) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.projects = append(b.projects, projectID)
+}
+
 func (b *bell) got() []ring {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]ring(nil), b.rings...)
+}
+
+func (b *bell) gotProjects() []uuid.UUID {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]uuid.UUID(nil), b.projects...)
 }
 
 // wrap puts a concrete change into the wire union, setting its type.
@@ -771,5 +784,23 @@ func TestSubmit_RemoveFromEmptySets(t *testing.T) {
 	f.mustSubmit(apigen.TaskRemoveDependency{TaskId: id, DependsOnId: testdb.NewID()})
 	if got := f.task(id); len(got.Tags) != 0 || len(got.Assignees) != 0 {
 		t.Errorf("task = %+v, want empty sets", got)
+	}
+}
+
+func TestSubmit_RingsProjectChangedOnRename(t *testing.T) {
+	f := setup(t)
+	f.mustSubmit(apigen.ProjectUpdate{Metadata: &apigen.MetadataPatch{"color": "red"}}) // not shown in the list
+	f.createTask("T")
+	if _, err := f.submit(apigen.ProjectUpdate{Name: ptr("")}); err == nil { // rejected
+		t.Fatal("blank name accepted")
+	}
+	if got := f.bell.gotProjects(); len(got) != 0 {
+		t.Fatalf("project list rung %v before any rename", got)
+	}
+
+	f.mustSubmit(apigen.ProjectUpdate{Name: ptr("Renamed")})
+	f.mustSubmit(apigen.ProjectUpdate{Description: ptr("Now with a description")})
+	if got, want := f.bell.gotProjects(), []uuid.UUID{f.project, f.project}; !reflect.DeepEqual(got, want) {
+		t.Errorf("project list rings = %v, want %v", got, want)
 	}
 }

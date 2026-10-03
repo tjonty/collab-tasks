@@ -47,3 +47,7 @@ FROM events
 WHERE project_id = @project_id AND seq > @after_seq
 ORDER BY seq
 LIMIT @page_size;
+
+-- name: ProjectSeqs :many
+-- The latest seq of each listed project, for the realtime poll.
+SELECT id, seq FROM projects WHERE id = ANY(@ids::uuid[]);

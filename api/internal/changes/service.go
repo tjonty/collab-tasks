@@ -17,11 +17,15 @@ import (
 	"github.com/tjonty/collab-tasks/api/internal/store"
 )
 
-// Doorbell is told after each accepted change commits, so other API
-// instances can pull the new event. It must not block, and its failures are
+// Doorbell is told after each accepted change commits, so every API
+// instance can pull the new event. It must not block, and its failures are
 // its own to log: a missed ring only delays delivery until the next poll.
 type Doorbell interface {
+	// Ring announces that the project's log has reached seq.
 	Ring(projectID uuid.UUID, seq int64)
+	// ProjectChanged announces that the project's name or description,
+	// as shown in the project list, changed.
+	ProjectChanged(projectID uuid.UUID)
 }
 
 // Error is an expected failure with a code from the contract, such as
@@ -135,6 +139,9 @@ func (s *Service) Submit(ctx context.Context, projectID, actorID, changeID uuid.
 
 	if s.doorbell != nil {
 		s.doorbell.Ring(projectID, seq)
+		if p, ok := change.(apigen.ProjectUpdate); ok && (p.Name != nil || p.Description != nil) {
+			s.doorbell.ProjectChanged(projectID)
+		}
 	}
 	return seq, nil
 }

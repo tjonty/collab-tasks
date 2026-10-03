@@ -11,6 +11,7 @@ import (
 
 	"github.com/tjonty/collab-tasks/api/internal/apigen"
 	"github.com/tjonty/collab-tasks/api/internal/domain"
+	"github.com/tjonty/collab-tasks/api/internal/realtime"
 	"github.com/tjonty/collab-tasks/api/internal/store"
 )
 
@@ -202,20 +203,12 @@ func (s *server) ListEvents(ctx context.Context, req apigen.ListEventsRequestObj
 	if more {
 		page.NextCursor = &rows[len(rows)-1].Seq
 	}
-	for _, e := range rows {
-		var change apigen.Change
-		if err := change.UnmarshalJSON(e.Payload); err != nil {
+	for _, r := range rows {
+		e, err := realtime.EventView(req.ProjectId, r)
+		if err != nil {
 			return nil, err
 		}
-		page.Events = append(page.Events, apigen.Event{
-			ProjectId: req.ProjectId,
-			Seq:       e.Seq,
-			ChangeId:  e.ChangeID,
-			ActorId:   e.ActorID,
-			CreatedAt: e.CreatedAt,
-			Touches:   e.Touches,
-			Change:    change,
-		})
+		page.Events = append(page.Events, e)
 	}
 	return apigen.ListEvents200JSONResponse(page), nil
 }

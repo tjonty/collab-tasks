@@ -295,3 +295,33 @@ func (q *Queries) ProjectSeq(ctx context.Context, id uuid.UUID) (int64, error) {
 	err := row.Scan(&seq)
 	return seq, err
 }
+
+const projectSeqs = `-- name: ProjectSeqs :many
+SELECT id, seq FROM projects WHERE id = ANY($1::uuid[])
+`
+
+type ProjectSeqsRow struct {
+	ID  uuid.UUID
+	Seq int64
+}
+
+// The latest seq of each listed project, for the realtime poll.
+func (q *Queries) ProjectSeqs(ctx context.Context, ids []uuid.UUID) ([]ProjectSeqsRow, error) {
+	rows, err := q.db.Query(ctx, projectSeqs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ProjectSeqsRow
+	for rows.Next() {
+		var i ProjectSeqsRow
+		if err := rows.Scan(&i.ID, &i.Seq); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -6,3 +6,6 @@ generate:
   models: true
   std-http-server: true
   strict-server: true
+output-options:
+  # Keep schemas no path references, such as the WebSocket messages.
+  skip-prune: true

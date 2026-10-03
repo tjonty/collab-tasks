@@ -108,6 +108,24 @@ func (e Status) Valid() bool {
 	}
 }
 
+// Defines values for WsResyncReason.
+const (
+	TooFarBehind WsResyncReason = "too_far_behind"
+	UnknownSeq   WsResyncReason = "unknown_seq"
+)
+
+// Valid indicates whether the value is a known member of the WsResyncReason enum.
+func (e WsResyncReason) Valid() bool {
+	switch e {
+	case TooFarBehind:
+		return true
+	case UnknownSeq:
+		return true
+	default:
+		return false
+	}
+}
+
 // Change One write to a project, discriminated by `type`.
 type Change struct {
 	union json.RawMessage
@@ -441,6 +459,79 @@ type TaskUpdate struct {
 type User struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
+}
+
+// WsCaughtUp The replay is done; events after `seq` arrive live.
+type WsCaughtUp struct {
+	ProjectId openapi_types.UUID `json:"projectId"`
+	Seq       int64              `json:"seq"`
+	Type      string             `json:"type"`
+}
+
+// WsClientMessage A message from client to server over `/ws`.
+type WsClientMessage struct {
+	union json.RawMessage
+}
+
+// WsError The client sent a message the server can't act on. The connection stays open.
+type WsError struct {
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
+	Type    string    `json:"type"`
+}
+
+// WsEvent One event of the followed project, in `seq` order.
+type WsEvent struct {
+	// Event An accepted change, as recorded in the project's log and delivered to
+	// every client.
+	Event     Event              `json:"event"`
+	ProjectId openapi_types.UUID `json:"projectId"`
+	Type      string             `json:"type"`
+}
+
+// WsProjectsChanged A project was created or renamed.
+type WsProjectsChanged struct {
+	Project ProjectSummary `json:"project"`
+	Type    string         `json:"type"`
+}
+
+// WsResync Replaying from `fromSeq` isn't possible: reload the project with
+// `GET /projects/{projectId}` and subscribe again from its `seq`.
+type WsResync struct {
+	ProjectId openapi_types.UUID `json:"projectId"`
+
+	// Reason `too_far_behind`: more than 5,000 events to replay.
+	// `unknown_seq`: `fromSeq` is past the end of the log, e.g. after the database was reset.
+	Reason WsResyncReason `json:"reason"`
+	Type   string         `json:"type"`
+}
+
+// WsResyncReason `too_far_behind`: more than 5,000 events to replay.
+// `unknown_seq`: `fromSeq` is past the end of the log, e.g. after the database was reset.
+type WsResyncReason string
+
+// WsServerMessage A message from server to client over `/ws`.
+type WsServerMessage struct {
+	union json.RawMessage
+}
+
+// WsSubscribe Follow a project, starting after `fromSeq`. Replaces any project followed before.
+type WsSubscribe struct {
+	// FromSeq The last `seq` the client has applied; 0 for none.
+	FromSeq   int64              `json:"fromSeq"`
+	ProjectId openapi_types.UUID `json:"projectId"`
+	Type      string             `json:"type"`
+}
+
+// WsSubscribeProjects Follow the project list.
+type WsSubscribeProjects struct {
+	Type string `json:"type"`
+}
+
+// WsUnsubscribe defines model for WsUnsubscribe.
+type WsUnsubscribe struct {
+	ProjectId openapi_types.UUID `json:"projectId"`
+	Type      string             `json:"type"`
 }
 
 // ProjectId defines model for ProjectId.
@@ -957,6 +1048,352 @@ func (t Change) MarshalJSON() ([]byte, error) {
 }
 
 func (t *Change) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsWsSubscribe returns the union data inside the WsClientMessage as a WsSubscribe
+func (t WsClientMessage) AsWsSubscribe() (WsSubscribe, error) {
+	var body WsSubscribe
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsSubscribe overwrites any union data inside the WsClientMessage as the provided WsSubscribe
+func (t *WsClientMessage) FromWsSubscribe(v WsSubscribe) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subscribe"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsSubscribe performs a merge with any union data inside the WsClientMessage, using the provided WsSubscribe
+func (t *WsClientMessage) MergeWsSubscribe(v WsSubscribe) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subscribe"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsUnsubscribe returns the union data inside the WsClientMessage as a WsUnsubscribe
+func (t WsClientMessage) AsWsUnsubscribe() (WsUnsubscribe, error) {
+	var body WsUnsubscribe
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsUnsubscribe overwrites any union data inside the WsClientMessage as the provided WsUnsubscribe
+func (t *WsClientMessage) FromWsUnsubscribe(v WsUnsubscribe) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"unsubscribe"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsUnsubscribe performs a merge with any union data inside the WsClientMessage, using the provided WsUnsubscribe
+func (t *WsClientMessage) MergeWsUnsubscribe(v WsUnsubscribe) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"unsubscribe"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsSubscribeProjects returns the union data inside the WsClientMessage as a WsSubscribeProjects
+func (t WsClientMessage) AsWsSubscribeProjects() (WsSubscribeProjects, error) {
+	var body WsSubscribeProjects
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsSubscribeProjects overwrites any union data inside the WsClientMessage as the provided WsSubscribeProjects
+func (t *WsClientMessage) FromWsSubscribeProjects(v WsSubscribeProjects) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subscribeProjects"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsSubscribeProjects performs a merge with any union data inside the WsClientMessage, using the provided WsSubscribeProjects
+func (t *WsClientMessage) MergeWsSubscribeProjects(v WsSubscribeProjects) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subscribeProjects"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t WsClientMessage) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t WsClientMessage) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "subscribe":
+		return t.AsWsSubscribe()
+	case "subscribeProjects":
+		return t.AsWsSubscribeProjects()
+	case "unsubscribe":
+		return t.AsWsUnsubscribe()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t WsClientMessage) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *WsClientMessage) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsWsEvent returns the union data inside the WsServerMessage as a WsEvent
+func (t WsServerMessage) AsWsEvent() (WsEvent, error) {
+	var body WsEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsEvent overwrites any union data inside the WsServerMessage as the provided WsEvent
+func (t *WsServerMessage) FromWsEvent(v WsEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"event"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsEvent performs a merge with any union data inside the WsServerMessage, using the provided WsEvent
+func (t *WsServerMessage) MergeWsEvent(v WsEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"event"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsCaughtUp returns the union data inside the WsServerMessage as a WsCaughtUp
+func (t WsServerMessage) AsWsCaughtUp() (WsCaughtUp, error) {
+	var body WsCaughtUp
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsCaughtUp overwrites any union data inside the WsServerMessage as the provided WsCaughtUp
+func (t *WsServerMessage) FromWsCaughtUp(v WsCaughtUp) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"caughtUp"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsCaughtUp performs a merge with any union data inside the WsServerMessage, using the provided WsCaughtUp
+func (t *WsServerMessage) MergeWsCaughtUp(v WsCaughtUp) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"caughtUp"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsProjectsChanged returns the union data inside the WsServerMessage as a WsProjectsChanged
+func (t WsServerMessage) AsWsProjectsChanged() (WsProjectsChanged, error) {
+	var body WsProjectsChanged
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsProjectsChanged overwrites any union data inside the WsServerMessage as the provided WsProjectsChanged
+func (t *WsServerMessage) FromWsProjectsChanged(v WsProjectsChanged) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"projectsChanged"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsProjectsChanged performs a merge with any union data inside the WsServerMessage, using the provided WsProjectsChanged
+func (t *WsServerMessage) MergeWsProjectsChanged(v WsProjectsChanged) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"projectsChanged"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsResync returns the union data inside the WsServerMessage as a WsResync
+func (t WsServerMessage) AsWsResync() (WsResync, error) {
+	var body WsResync
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsResync overwrites any union data inside the WsServerMessage as the provided WsResync
+func (t *WsServerMessage) FromWsResync(v WsResync) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"resync"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsResync performs a merge with any union data inside the WsServerMessage, using the provided WsResync
+func (t *WsServerMessage) MergeWsResync(v WsResync) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"resync"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsError returns the union data inside the WsServerMessage as a WsError
+func (t WsServerMessage) AsWsError() (WsError, error) {
+	var body WsError
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsError overwrites any union data inside the WsServerMessage as the provided WsError
+func (t *WsServerMessage) FromWsError(v WsError) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"error"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsError performs a merge with any union data inside the WsServerMessage, using the provided WsError
+func (t *WsServerMessage) MergeWsError(v WsError) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"error"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t WsServerMessage) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t WsServerMessage) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "caughtUp":
+		return t.AsWsCaughtUp()
+	case "error":
+		return t.AsWsError()
+	case "event":
+		return t.AsWsEvent()
+	case "projectsChanged":
+		return t.AsWsProjectsChanged()
+	case "resync":
+		return t.AsWsResync()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t WsServerMessage) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *WsServerMessage) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

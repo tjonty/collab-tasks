@@ -18,6 +18,7 @@ import (
 	"github.com/tjonty/collab-tasks/api/internal/config"
 	"github.com/tjonty/collab-tasks/api/internal/health"
 	"github.com/tjonty/collab-tasks/api/internal/httpapi"
+	"github.com/tjonty/collab-tasks/api/internal/realtime"
 	"github.com/tjonty/collab-tasks/api/internal/store"
 )
 
@@ -63,13 +64,24 @@ func run() error {
 		}),
 	}
 
+	// Real-time delivery: after each commit the publisher rings a Redis
+	// doorbell, every instance's listener hears it, and the hub pulls the new
+	// events from Postgres for its own WebSocket clients. The hub's poll
+	// covers lost doorbells, including all of them while Redis is down.
+	hub := realtime.NewHub(realtime.NewPGStore(pool), realtime.Options{
+		OriginPatterns: realtime.OriginPatterns(cfg.CORSOrigin),
+	})
+	pub := realtime.NewPublisher(rdb)
+	go hub.Run(ctx)
+	go pub.Run(ctx)
+	go realtime.Listen(ctx, rdb, hub)
+
 	handler := httpapi.NewRouter(httpapi.Config{
 		Checks:     checks,
 		CORSOrigin: cfg.CORSOrigin,
 		Pool:       pool,
-		// Real-time delivery (the Redis doorbell) comes later; until then
-		// accepted changes ring nothing.
-		Doorbell: nil,
+		Doorbell:   pub,
+		Realtime:   hub,
 	})
 
 	srv := &http.Server{
@@ -77,6 +89,8 @@ func run() error {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	// Shutdown doesn't wait for WebSockets; ask them to reconnect instead.
+	srv.RegisterOnShutdown(hub.CloseAll)
 
 	serveErr := make(chan error, 1)
 	go func() {
