@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The app's icon. favicon.ico and apple-icon.png are made from it: npm run icons -->
+  <rect x="2" y="2" width="28" height="28" rx="7" fill="#f2c46a"/>
+  <polyline points="10,16.5 14.3,20.8 22,11.8" fill="none" stroke="#2a2216" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

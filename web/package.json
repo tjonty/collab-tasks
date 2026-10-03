@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
     "gen:api": "openapi-typescript ../contract/openapi.yaml -o src/lib/api/schema.d.ts",
+    "icons": "node scripts/icons.mjs",
     "test:e2e": "playwright test",
     "test:e2e:demo": "E2E_DEMO=1 playwright test"
   },
