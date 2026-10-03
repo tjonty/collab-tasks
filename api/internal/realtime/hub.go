@@ -90,6 +90,7 @@ type Hub struct {
 	feeds    map[uuid.UUID]*feed
 	clients  map[*client]struct{}
 	watchers map[*client]struct{} // following the project list
+	closing  bool                 // CloseAll has run: the server is shutting down
 }
 
 // NewHub returns a hub reading from store. Call Run to start its poll.
@@ -155,7 +156,12 @@ func (h *Hub) connect(drop func(code websocket.StatusCode, reason string)) *clie
 	c := &client{send: make(chan outbound, h.opts.QueueSize), drop: drop}
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
+	closing := h.closing
 	h.mu.Unlock()
+	if closing {
+		// The handshake finished after CloseAll took its list of clients.
+		h.dropClient(c, websocket.StatusGoingAway, "server shutting down")
+	}
 	return c
 }
 
@@ -470,9 +476,11 @@ func (h *Hub) poll(ctx context.Context) {
 	}
 }
 
-// CloseAll closes every connection with 1001 Going Away, for shutdown.
+// CloseAll closes every connection with 1001 Going Away, for shutdown. A
+// connection whose handshake finishes afterwards is closed the same way.
 func (h *Hub) CloseAll() {
 	h.mu.Lock()
+	h.closing = true
 	clients := make([]*client, 0, len(h.clients))
 	for c := range h.clients {
 		clients = append(clients, c)

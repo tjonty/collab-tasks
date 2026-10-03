@@ -458,6 +458,22 @@ func TestCloseAll_DropsEveryClientWithGoingAway(t *testing.T) {
 	}
 }
 
+// A handshake can finish just after shutdown began: the server registers
+// the connection after CloseAll has run. It must be told too, not left open.
+func TestCloseAll_AlsoDropsClientsThatConnectAfterwards(t *testing.T) {
+	h := newHub(newMemStore(), Options{})
+	h.CloseAll()
+	late := dial(t, h)
+	select {
+	case code := <-late.drops:
+		if code != websocket.StatusGoingAway {
+			t.Errorf("closed with %d, want 1001", code)
+		}
+	case <-time.After(time.Second):
+		t.Error("a client that connected after CloseAll was left open")
+	}
+}
+
 func TestSubscribe_RacingLiveWritesHasNoGapsOrDuplicates(t *testing.T) {
 	store := newMemStore()
 	p := store.project(0)
