@@ -24,7 +24,7 @@ export function StatusSelect({
     <div className="flex flex-col gap-1">
       <select
         aria-label="Status"
-        className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+        className="rounded border border-line-strong bg-surface px-2 py-1"
         value={status}
         onChange={(e) => onChange(e.target.value as Status)}
       >
@@ -35,7 +35,7 @@ export function StatusSelect({
           </option>
         ))}
       </select>
-      {reason && moves.includes("done") && <p className="text-xs text-amber-700 dark:text-amber-400">{reason}</p>}
+      {reason && moves.includes("done") && <p className="text-xs text-warning-ink">{reason}</p>}
     </div>
   );
 }

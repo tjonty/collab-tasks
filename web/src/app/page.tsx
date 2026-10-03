@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <>
       <ProjectsHome />
-      <footer className="mx-auto w-full max-w-3xl px-6 pb-8 text-xs text-zinc-500">
+      <footer className="mx-auto w-full max-w-3xl px-6 pb-8 text-xs text-muted">
         <ApiStatus />
       </footer>
     </>

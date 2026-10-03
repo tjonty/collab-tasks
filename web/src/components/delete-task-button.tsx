@@ -22,7 +22,7 @@ export function DeleteTaskButton({
     <button
       type="button"
       onClick={ask}
-      className="rounded border border-red-300 px-2 py-1 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+      className="rounded border border-danger-line px-2 py-1 text-sm text-danger-ink hover:bg-danger-soft"
     >
       Delete task
     </button>

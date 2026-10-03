@@ -1,14 +1,23 @@
 "use client";
 
+import type { Status } from "@/lib/api/types";
 import type { TaskState } from "@/lib/sync/apply";
 import { PRIORITY_LABEL, STATUS_LABEL } from "@/lib/ui/labels";
 
 const PRIORITY_COLOR = {
-  urgent: "text-red-600 dark:text-red-400",
-  high: "text-orange-600 dark:text-orange-400",
-  medium: "text-zinc-600 dark:text-zinc-400",
-  low: "text-zinc-400 dark:text-zinc-500",
+  urgent: "text-danger-ink",
+  high: "text-warning-ink",
+  medium: "text-muted",
+  low: "text-muted",
 } as const;
+
+// A dot before the status: an open ring for To do, filled once work starts.
+const STATUS_DOT: Record<Status, string> = {
+  todo: "border border-muted",
+  in_progress: "bg-info",
+  in_review: "bg-accent-strong",
+  done: "bg-success",
+};
 
 /** One row of the task list. */
 export function TaskRow({
@@ -29,24 +38,25 @@ export function TaskRow({
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="flex h-full w-full items-center gap-3 border-b border-zinc-100 px-3 text-left text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+      className="flex h-full w-full items-center gap-3 border-b border-line px-3 text-left text-sm hover:bg-subtle"
     >
-      <span className="w-24 shrink-0 text-xs text-zinc-500">{STATUS_LABEL[task.status]}</span>
-      <span className={`min-w-0 flex-1 truncate ${task.status === "done" ? "text-zinc-400 line-through" : ""}`}>
+      <span className="flex w-24 shrink-0 items-center gap-1.5 text-xs text-muted">
+        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[task.status]}`} />
+        {STATUS_LABEL[task.status]}
+      </span>
+      <span className={`min-w-0 flex-1 truncate ${task.status === "done" ? "text-muted line-through" : ""}`}>
         {task.title}
       </span>
       {blocked && (
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-          Blocked
-        </span>
+        <span className="rounded bg-warning-soft px-1.5 py-0.5 text-xs font-medium text-warning-ink">Blocked</span>
       )}
-      {saving && <span className="text-xs text-zinc-400">saving…</span>}
+      {saving && <span className="text-xs text-muted">saving…</span>}
       {task.tags.slice(0, 3).map((tag) => (
-        <span key={tag} className="hidden rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 sm:inline dark:bg-zinc-800 dark:text-zinc-300">
+        <span key={tag} className="hidden rounded bg-subtle px-1.5 py-0.5 text-xs text-muted sm:inline">
           {tag}
         </span>
       ))}
-      {assignees && <span className="hidden w-28 truncate text-xs text-zinc-500 md:inline">{assignees}</span>}
+      {assignees && <span className="hidden w-28 truncate text-xs text-muted md:inline">{assignees}</span>}
       <span className={`w-16 shrink-0 text-right text-xs ${PRIORITY_COLOR[task.priority]}`}>
         {PRIORITY_LABEL[task.priority]}
       </span>

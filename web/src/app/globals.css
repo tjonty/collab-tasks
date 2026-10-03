@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+/* dark: variants follow <html data-theme>, which the person's choice sets (lib/theme.ts), not the system setting. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * The palette, "Honey & Cream": gold #f2c46a and cream #fcf0da, with warm
+ * neutrals around them. Components use these names (bg-canvas, text-muted,
+ * border-line …), never raw colors, so the dark theme is just the overrides
+ * below. palette.test.ts checks every text color against the backgrounds it
+ * sits on.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --canvas: #fcf0da; /* the page: cream */
+  --surface: #fffbf2; /* header, toolbar, drawer, inputs, lists */
+  --subtle: #f6e7c9; /* hover, chips, quiet fills */
+  --line: #ecdcbc; /* dividers */
+  --line-strong: #d6c09a; /* control borders */
+  --ink: #2a2216; /* text */
+  --muted: #6b5a40; /* secondary text */
+  --accent: #f2c46a; /* gold: primary buttons */
+  --accent-hover: #e9b44a;
+  --on-accent: #2a2216; /* white is unreadable on gold */
+  --accent-strong: #946411; /* deeper gold for thin marks on cream: focus ring, In review */
+  --success: #15803d; /* Live, Done */
+  --info: #0369a1; /* In progress */
+  --warning: #c2410c; /* Reconnecting: orange, so it isn't mistaken for the gold */
+  --warning-soft: #fde4cf; /* Blocked */
+  --warning-ink: #8f4a0a; /* Blocked, waiting, High: browner than Urgent's red */
+  --danger: #dc2626; /* Offline */
+  --danger-soft: #fde4e1; /* error banners */
+  --danger-ink: #b42318; /* errors, Delete, Urgent */
+  --danger-line: #f2c0b8;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #15120c; /* espresso */
+  --surface: #1d1912;
+  --subtle: #28221a;
+  --line: #342c20;
+  --line-strong: #4a4131;
+  --ink: #fcf0da; /* cream text */
+  --muted: #baac92;
+  --accent: #f2c46a;
+  --accent-hover: #f6d38c;
+  --on-accent: #1d170c;
+  --accent-strong: #f2c46a; /* the gold itself stands out on dark */
+  --success: #4ade80;
+  --info: #38bdf8;
+  --warning: #fb923c;
+  --warning-soft: #3b2210;
+  --warning-ink: #fdba74;
+  --danger: #f87171;
+  --danger-soft: #3a1518;
+  --danger-ink: #fca5a5;
+  --danger-line: #5e2328;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-line: var(--danger-line);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--canvas);
+  color: var(--ink);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Keyboard focus, in the deeper gold: the gold itself is too faint on cream. */
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }

@@ -8,7 +8,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
   const { projectId } = await params;
   return (
     // ProjectView reads ?task=, which needs a Suspense boundary.
-    <Suspense fallback={<p className="p-6 text-sm text-zinc-500">Loading project…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-muted">Loading project…</p>}>
       <ProjectView key={projectId} projectId={projectId} />
     </Suspense>
   );

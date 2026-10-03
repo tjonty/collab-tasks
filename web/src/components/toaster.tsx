@@ -27,7 +27,7 @@ export function Toaster({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="alert"
-            className="rounded-md bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
+            className="rounded-md bg-ink px-4 py-3 text-sm text-canvas shadow-lg"
           >
             {t.text}
           </div>

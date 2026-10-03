@@ -35,7 +35,7 @@ export function EditableText({
       if (draft !== null && draft !== value) onCommit(draft);
       setDraft(null);
     },
-    className: `w-full rounded border border-transparent bg-transparent px-2 py-1 hover:border-zinc-300 focus:border-zinc-400 focus:outline-none dark:hover:border-zinc-700 ${className}`,
+    className: `w-full rounded border border-transparent bg-transparent px-2 py-1 hover:border-line-strong focus:border-accent-strong focus:outline-none ${className}`,
   };
   return multiline ? (
     <textarea rows={6} {...props} />

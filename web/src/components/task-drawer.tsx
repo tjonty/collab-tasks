@@ -35,12 +35,12 @@ export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskI
 
   const send = (change: Change) => sync.send(change);
   const savingMark = (field: string) =>
-    saving.has(field) ? <span className="ml-2 text-xs font-normal text-zinc-400">saving…</span> : null;
+    saving.has(field) ? <span className="ml-2 text-xs font-normal text-muted">saving…</span> : null;
 
   if (!task) {
     return (
       <Panel onClose={onClose}>
-        <p className="text-sm text-zinc-500">{sync.isDeleted(taskId) ? "This task was deleted." : "Loading task…"}</p>
+        <p className="text-sm text-muted">{sync.isDeleted(taskId) ? "This task was deleted." : "Loading task…"}</p>
       </Panel>
     );
   }
@@ -72,7 +72,7 @@ export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskI
           aria-label="Priority"
           value={task.priority}
           onChange={(e) => send({ type: "task.update", taskId, priority: e.target.value as Priority })}
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+          className="rounded border border-line-strong bg-surface px-2 py-1"
         >
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
@@ -92,7 +92,7 @@ export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskI
           aria-label="Add assignee"
           value=""
           onChange={(e) => e.target.value && send({ type: "task.addAssignee", taskId, userId: e.target.value })}
-          className="mt-1 w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="mt-1 w-full rounded border border-line-strong bg-surface px-2 py-1 text-sm"
         >
           <option value="">Add an assignee…</option>
           {users
@@ -116,14 +116,14 @@ export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskI
             const dep = lookup.get(id);
             return (
               <li key={id} className="flex items-center justify-between gap-2">
-                <span className={dep?.status === "done" ? "text-zinc-400 line-through" : ""}>
-                  {dep?.title ?? "…"} {dep && <span className="text-xs text-zinc-500">({STATUS_LABEL[dep.status]})</span>}
+                <span className={dep?.status === "done" ? "text-muted line-through" : ""}>
+                  {dep?.title ?? "…"} {dep && <span className="text-xs text-muted">({STATUS_LABEL[dep.status]})</span>}
                 </span>
                 <button
                   type="button"
                   aria-label={`Remove dependency ${dep?.title ?? id}`}
                   onClick={() => send({ type: "task.removeDependency", taskId, dependsOnId: id })}
-                  className="text-xs text-zinc-500 hover:text-red-600"
+                  className="text-xs text-muted hover:text-danger-ink"
                 >
                   Remove
                 </button>
@@ -161,7 +161,7 @@ export function TaskDrawer({ sync, taskId, onClose }: { sync: ProjectSync; taskI
           </Field>
         </>
       ) : (
-        <p className="text-sm text-zinc-500">Loading details…</p>
+        <p className="text-sm text-muted">Loading details…</p>
       )}
 
       <div className="flex justify-end">
@@ -188,9 +188,9 @@ function Panel({ children, onClose }: { children: React.ReactNode; onClose: () =
   return (
     <aside
       aria-label="Task"
-      className="flex w-[28rem] max-w-full shrink-0 flex-col gap-4 overflow-y-auto border-l border-zinc-200 p-5 dark:border-zinc-800"
+      className="flex w-[28rem] max-w-full shrink-0 flex-col gap-4 overflow-y-auto border-l border-line bg-surface p-5"
     >
-      <button type="button" onClick={onClose} className="self-end text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+      <button type="button" onClick={onClose} className="self-end text-sm text-muted hover:text-ink">
         Close
       </button>
       {children}
@@ -201,7 +201,7 @@ function Panel({ children, onClose }: { children: React.ReactNode; onClose: () =
 function Field({ label, saving, children }: { label: string; saving?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
         {label}
         {saving}
       </h3>
@@ -214,9 +214,9 @@ function Chips<T extends string>({ items, label, onRemove }: { items: T[]; label
   return (
     <div className="flex flex-wrap gap-1">
       {items.map((item) => (
-        <span key={item} className="inline-flex items-center gap-1 rounded bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
+        <span key={item} className="inline-flex items-center gap-1 rounded bg-subtle px-2 py-0.5 text-xs">
           {label(item)}
-          <button type="button" aria-label={`Remove ${label(item)}`} onClick={() => onRemove(item)} className="text-zinc-500 hover:text-red-600">
+          <button type="button" aria-label={`Remove ${label(item)}`} onClick={() => onRemove(item)} className="text-muted hover:text-danger-ink">
             ×
           </button>
         </span>
@@ -242,7 +242,7 @@ function AddTag({ onAdd }: { onAdd: (tag: string) => void }) {
         maxLength={30}
         value={tag}
         onChange={(e) => setTag(e.target.value)}
-        className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+        className="w-full rounded border border-line-strong bg-surface px-2 py-1 text-sm"
       />
     </form>
   );
@@ -263,9 +263,9 @@ function CustomFields({
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => (
           <div key={k} className="flex items-center gap-2">
-            <span className="w-32 shrink-0 truncate text-zinc-500">{k}</span>
+            <span className="w-32 shrink-0 truncate text-muted">{k}</span>
             <EditableText label={`Custom field ${k}`} value={String(v)} onCommit={(raw) => onSet(k, parseFieldValue(raw))} />
-            <button type="button" aria-label={`Remove custom field ${k}`} onClick={() => onSet(k, null)} className="text-xs text-zinc-500 hover:text-red-600">
+            <button type="button" aria-label={`Remove custom field ${k}`} onClick={() => onSet(k, null)} className="text-xs text-muted hover:text-danger-ink">
               ×
             </button>
           </div>
@@ -280,9 +280,9 @@ function CustomFields({
           setValue("");
         }}
       >
-        <input aria-label="New field name" placeholder="Field" maxLength={40} value={key} onChange={(e) => setKey(e.target.value)} className="w-32 rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700" />
-        <input aria-label="New field value" placeholder="Value" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} className="min-w-0 flex-1 rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700" />
-        <button type="submit" className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700">
+        <input aria-label="New field name" placeholder="Field" maxLength={40} value={key} onChange={(e) => setKey(e.target.value)} className="w-32 rounded border border-line-strong bg-surface px-2 py-1" />
+        <input aria-label="New field value" placeholder="Value" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} className="min-w-0 flex-1 rounded border border-line-strong bg-surface px-2 py-1" />
+        <button type="submit" className="rounded border border-line-strong px-2 py-1 hover:bg-subtle">
           Add
         </button>
       </form>
@@ -303,18 +303,18 @@ function Comments({
 }) {
   const [content, setContent] = useState("");
   return (
-    <section className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Comments</h3>
+    <section className="flex flex-col gap-2 border-t border-line pt-4">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Comments</h3>
       <ol className="flex flex-col gap-3">
         {comments.map((c) => (
           <li key={c.id} className="text-sm">
             <span className="font-medium">{userName(c.author)}</span>{" "}
-            <time className="text-xs text-zinc-500">{new Date(c.timestamp).toLocaleString()}</time>
+            <time className="text-xs text-muted">{new Date(c.timestamp).toLocaleString()}</time>
             <p className="whitespace-pre-wrap">{c.content}</p>
           </li>
         ))}
       </ol>
-      {sending > 0 && <p className="text-xs text-zinc-400">Sending {sending === 1 ? "a comment" : `${sending} comments`}…</p>}
+      {sending > 0 && <p className="text-xs text-muted">Sending {sending === 1 ? "a comment" : `${sending} comments`}…</p>}
       <form
         className="flex flex-col gap-2"
         onSubmit={(e) => {
@@ -331,9 +331,9 @@ function Comments({
           placeholder="Write a comment…"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-line-strong bg-surface px-2 py-1 text-sm"
         />
-        <button type="submit" disabled={!content.trim()} className="self-end rounded bg-zinc-900 px-3 py-1 text-sm text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900">
+        <button type="submit" disabled={!content.trim()} className="self-end rounded bg-accent px-3 py-1 text-sm text-on-accent enabled:hover:bg-accent-hover disabled:opacity-40">
           Comment
         </button>
       </form>

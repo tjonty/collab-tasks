@@ -26,7 +26,7 @@ export function DependencyPicker({
   return (
     <select
       aria-label="Add dependency"
-      className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+      className="w-full rounded border border-line-strong bg-surface px-2 py-1 text-sm"
       value=""
       onChange={(e) => e.target.value && onAdd(e.target.value)}
     >

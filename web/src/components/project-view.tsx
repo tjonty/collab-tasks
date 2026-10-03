@@ -20,6 +20,7 @@ import { EditableText } from "./editable-text";
 import { useSession } from "./session";
 import { TaskDrawer } from "./task-drawer";
 import { TaskList } from "./task-list";
+import { ThemeToggle } from "./theme-toggle";
 import { useToast } from "./toaster";
 
 /** One project, live: header, filters, the task list and the task drawer. */
@@ -70,9 +71,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
     return (
       <main className="mx-auto mt-24 flex max-w-md flex-col gap-3 px-6">
         <h2 className="text-lg font-semibold">This project couldn&apos;t be loaded</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{meta.error}</p>
+        <p className="text-sm text-muted">{meta.error}</p>
         <div className="flex gap-3 text-sm">
-          <button type="button" onClick={() => void sync.start()} className="rounded border px-3 py-1">
+          <button type="button" onClick={() => void sync.start()} className="rounded border border-line-strong bg-surface px-3 py-1 hover:bg-subtle">
             Try again
           </button>
           <Link href="/" className="px-3 py-1 underline">
@@ -85,8 +86,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   return (
     <main className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+      <header className="flex items-center gap-4 border-b border-line bg-surface px-4 py-3">
+        <Link href="/" className="text-sm text-muted hover:text-ink">
           ← Projects
         </Link>
         <div className="min-w-0 flex-1">
@@ -104,20 +105,21 @@ export function ProjectView({ projectId }: { projectId: string }) {
                 value={meta.project.description}
                 maxLength={2000}
                 placeholder="Add a description"
-                className="text-sm text-zinc-500"
+                className="text-sm text-muted"
                 onCommit={(description) => sync.send({ type: "project.update", description })}
               />
             </>
           )}
         </div>
         <ConnectionBadge status={meta.status} />
-        <span className="text-sm text-zinc-500">{identity.displayName}</span>
-        <button type="button" onClick={signOut} className="text-sm text-zinc-500 underline">
+        <span className="text-sm text-muted">{identity.displayName}</span>
+        <button type="button" onClick={signOut} className="text-sm text-muted underline hover:text-ink">
           Switch user
         </button>
+        <ThemeToggle />
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 text-sm dark:border-zinc-800">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2 text-sm">
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -133,21 +135,21 @@ export function ProjectView({ projectId }: { projectId: string }) {
             maxLength={200}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-56 rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+            className="w-56 rounded border border-line-strong bg-surface px-2 py-1"
           />
-          <button type="submit" disabled={!title.trim()} className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900">
+          <button type="submit" disabled={!title.trim()} className="rounded bg-accent px-3 py-1 text-on-accent enabled:hover:bg-accent-hover disabled:opacity-40">
             Add task
           </button>
         </form>
-        <span className="mx-2 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+        <span className="mx-2 h-5 w-px bg-line" />
         <input
           aria-label="Search"
           placeholder="Search titles"
           value={filters.text}
           onChange={(e) => setFilters({ ...filters, text: e.target.value })}
-          className="w-40 rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+          className="w-40 rounded border border-line-strong bg-surface px-2 py-1"
         />
-        <select aria-label="Filter by status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value as Status | "all" })} className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700">
+        <select aria-label="Filter by status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value as Status | "all" })} className="rounded border border-line-strong bg-surface px-2 py-1">
           <option value="all">Any status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -155,7 +157,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
             </option>
           ))}
         </select>
-        <select aria-label="Filter by assignee" value={filters.assignee} onChange={(e) => setFilters({ ...filters, assignee: e.target.value })} className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700">
+        <select aria-label="Filter by assignee" value={filters.assignee} onChange={(e) => setFilters({ ...filters, assignee: e.target.value })} className="rounded border border-line-strong bg-surface px-2 py-1">
           <option value="">Anyone</option>
           {userList.map((u) => (
             <option key={u.id} value={u.id}>
@@ -163,7 +165,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
             </option>
           ))}
         </select>
-        <select aria-label="Filter by tag" value={filters.tag} onChange={(e) => setFilters({ ...filters, tag: e.target.value })} className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700">
+        <select aria-label="Filter by tag" value={filters.tag} onChange={(e) => setFilters({ ...filters, tag: e.target.value })} className="rounded border border-line-strong bg-surface px-2 py-1">
           <option value="">Any tag</option>
           {tags.map((t) => (
             <option key={t} value={t}>
@@ -175,19 +177,19 @@ export function ProjectView({ projectId }: { projectId: string }) {
           <input type="checkbox" checked={filters.blockedOnly} onChange={(e) => setFilters({ ...filters, blockedOnly: e.target.checked })} />
           Blocked only
         </label>
-        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700">
+        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded border border-line-strong bg-surface px-2 py-1">
           <option value="created">Oldest first</option>
           <option value="priority">Priority</option>
           <option value="status">Status</option>
           <option value="title">Title</option>
         </select>
-        <span className="ml-auto text-xs text-zinc-500">
+        <span className="ml-auto text-xs text-muted">
           {meta.loading ? `Loading tasks… ${tasks.length.toLocaleString()} so far` : `${visible.length.toLocaleString()} of ${tasks.length.toLocaleString()} tasks`}
         </span>
       </div>
 
       {meta.error && meta.project && (
-        <div role="alert" className="flex items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div role="alert" className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-4 py-2 text-sm text-danger-ink">
           <span>Couldn&apos;t load every task: {meta.error}</span>
           <button type="button" className="underline" onClick={() => void sync.start()}>
             Try again
@@ -196,7 +198,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       )}
 
       {failed.length > 0 && (
-        <div role="alert" className="flex flex-col gap-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div role="alert" className="flex flex-col gap-1 border-b border-danger-line bg-danger-soft px-4 py-2 text-sm text-danger-ink">
           {failed.map((p) => (
             <div key={p.changeId} className="flex items-center gap-3">
               <span>Couldn&apos;t save a change ({p.change.type}).</span>

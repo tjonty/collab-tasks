@@ -17,7 +17,7 @@ docker compose up --build
 
 This starts Postgres, Redis, the API and the web app. Then open:
 
-- Web: http://localhost:3000. Pick a display name, then create or open a project. Each browser tab can be a different person.
+- Web: http://localhost:3000. Pick a display name, then create or open a project. Each browser tab can be a different person. The System / Light / Dark switch in the header sets the theme for the whole browser.
 - API: http://localhost:8080/healthz. It returns `{"postgres":"ok","redis":"ok"}` with 200, or 503 if either dependency is down.
 
 ### Seed a demo project

@@ -12,6 +12,7 @@ import { Connection, type ConnectionStatus } from "@/lib/sync/connection";
 
 import { ConnectionBadge } from "./connection-badge";
 import { useSession } from "./session";
+import { ThemeToggle } from "./theme-toggle";
 
 const KEY = ["projects"];
 
@@ -74,10 +75,11 @@ export function ProjectsHome() {
         <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
         <div className="flex items-center gap-3 text-sm">
           <ConnectionBadge status={status} />
-          <span className="text-zinc-500">{identity.displayName}</span>
-          <button type="button" onClick={signOut} className="text-zinc-500 underline">
+          <span className="text-muted">{identity.displayName}</span>
+          <button type="button" onClick={signOut} className="text-muted underline hover:text-ink">
             Switch user
           </button>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -94,34 +96,34 @@ export function ProjectsHome() {
           maxLength={100}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+          className="flex-1 rounded border border-line-strong bg-surface px-3 py-2 text-sm"
         />
         <button
           type="submit"
           disabled={!name.trim() || create.isPending}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent enabled:hover:bg-accent-hover disabled:opacity-40"
         >
           New project
         </button>
       </form>
-      {create.error && <p className="text-sm text-red-600">{create.error.message}</p>}
+      {create.error && <p className="text-sm text-danger-ink">{create.error.message}</p>}
 
-      {projects.isPending && <p className="text-sm text-zinc-500">Loading projects…</p>}
+      {projects.isPending && <p className="text-sm text-muted">Loading projects…</p>}
       {projects.error && (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-danger-ink">
           {projects.error.message}{" "}
           <button type="button" className="underline" onClick={() => projects.refetch()}>
             Try again
           </button>
         </p>
       )}
-      {projects.data?.length === 0 && <p className="text-sm text-zinc-500">No projects yet. Create the first one.</p>}
-      <ul className="flex flex-col divide-y divide-zinc-200 rounded border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+      {projects.data?.length === 0 && <p className="text-sm text-muted">No projects yet. Create the first one.</p>}
+      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
         {projects.data?.map((p) => (
           <li key={p.id}>
-            <Link href={`/projects/${p.id}`} className="flex items-baseline justify-between gap-4 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900">
+            <Link href={`/projects/${p.id}`} className="flex items-baseline justify-between gap-4 px-4 py-3 hover:bg-subtle">
               <span className="font-medium">{p.name}</span>
-              <span className="truncate text-sm text-zinc-500">{p.description}</span>
+              <span className="truncate text-sm text-muted">{p.description}</span>
             </Link>
           </li>
         ))}
