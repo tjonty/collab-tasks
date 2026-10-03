@@ -1,0 +1,143 @@
+# Checks every push to main and every pull request: the Go API, the web app,
+# and the whole stack end to end.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Generated code is current
+        # Regenerates the server types (oapi-codegen) and the SQL code (sqlc,
+        # pinned to the version in the generated headers); any diff means
+        # someone changed the contract or a query without regenerating.
+        run: |
+          go generate ./...
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -w /src sqlc/sqlc:1.31.1 generate
+          git diff --exit-code -- .
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        # The integration tests start Postgres and Redis with testcontainers,
+        # on the runner's Docker.
+        run: go test -race -count=1 ./...
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Generated types are current
+        # schema.d.ts is generated from the contract; a diff means the
+        # contract changed without regenerating.
+        run: npm run gen:api && git diff --exit-code -- src/lib/api/schema.d.ts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    needs: [go, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start the stack
+        run: docker compose up --build -d --wait --wait-timeout 300
+      - name: Seed smoke test
+        run: docker compose exec -T api /seed -tasks 500 -comments 50
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npm run test:e2e
+        working-directory: web
+      - name: Collect the stack's logs
+        if: failure()
+        run: docker compose logs --no-color > compose.log
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results
+          path: |
+            web/test-results/
+            compose.log
+          retention-days: 7
+
+  # Pushes to main that pass everything above publish both images to GHCR.
+  # The web image has http://localhost:8080 built in as its API URL, so they
+  # are for running locally.
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [go, web, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: API image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/collab-tasks-api:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/collab-tasks-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Web image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./web
+          build-args: NEXT_PUBLIC_API_URL=http://localhost:8080
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/collab-tasks-web:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/collab-tasks-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web

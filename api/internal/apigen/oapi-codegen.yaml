@@ -6,6 +6,8 @@ generate:
   models: true
   std-http-server: true
   strict-server: true
+  # The contract itself, served at /openapi.json and browsable at /docs.
+  embedded-spec: true
 output-options:
   # Keep schemas no path references, such as the WebSocket messages.
   skip-prune: true

@@ -28,13 +28,17 @@ type Config struct {
 	Realtime http.Handler
 }
 
-// NewRouter returns the API's root handler: /healthz, the contract's
-// operations and the /ws endpoint, wrapped in CORS. Responses of 1 KB or
-// more are gzipped for clients that accept it, which shrinks a page of task
-// summaries several times over.
+// NewRouter returns the API's root handler: /healthz, the contract (as
+// /openapi.json, and browsable at /docs), its operations and the /ws
+// endpoint, wrapped in CORS. Responses of 1 KB or more are gzipped for
+// clients that accept it, which shrinks a page of task summaries several
+// times over.
 func NewRouter(cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", health.Handler(cfg.Checks, healthCheckTimeout))
+	// Public, like /healthz: no X-User-Id needed to read the contract.
+	mux.Handle("GET /openapi.json", openAPIHandler())
+	mux.Handle("GET /docs", docsHandler())
 
 	q := store.New(cfg.Pool)
 	srv := &server{pool: cfg.Pool, q: q, changes: changes.NewService(cfg.Pool, cfg.Doorbell), doorbell: cfg.Doorbell}
