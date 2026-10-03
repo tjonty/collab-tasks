@@ -1,10 +1,14 @@
 import { ApiStatus } from "@/components/api-status";
+import { ProjectsHome } from "@/components/projects-home";
 
+// The static shell only: the list is live data, rendered in the browser.
 export default function Home() {
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-24 font-sans">
-      <h1 className="text-3xl font-semibold tracking-tight">Collab Tasks</h1>
-      <ApiStatus />
-    </main>
+    <>
+      <ProjectsHome />
+      <footer className="mx-auto w-full max-w-3xl px-6 pb-8 text-xs text-zinc-500">
+        <ApiStatus />
+      </footer>
+    </>
   );
 }
