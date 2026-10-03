@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/klauspost/compress/gzhttp"
 
 	"github.com/tjonty/collab-tasks/api/internal/apigen"
 	"github.com/tjonty/collab-tasks/api/internal/changes"
@@ -26,13 +27,15 @@ type Config struct {
 }
 
 // NewRouter returns the API's root handler: /healthz and the contract's
-// operations, wrapped in CORS.
+// operations, wrapped in CORS. Responses of 1 KB or more are gzipped for
+// clients that accept it, which shrinks a page of task summaries several
+// times over.
 func NewRouter(cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", health.Handler(cfg.Checks, healthCheckTimeout))
 
 	q := store.New(cfg.Pool)
-	srv := &server{q: q, changes: changes.NewService(cfg.Pool, cfg.Doorbell)}
+	srv := &server{pool: cfg.Pool, q: q, changes: changes.NewService(cfg.Pool, cfg.Doorbell)}
 	strict := apigen.NewStrictHandlerWithOptions(srv,
 		[]apigen.StrictMiddlewareFunc{identify(q)},
 		apigen.StrictHTTPServerOptions{
@@ -43,5 +46,5 @@ func NewRouter(cfg Config) http.Handler {
 		BaseRouter:       mux,
 		ErrorHandlerFunc: badParam,
 	})
-	return CORS(cfg.CORSOrigin, mux)
+	return CORS(cfg.CORSOrigin, gzhttp.GzipHandler(mux))
 }

@@ -7,9 +7,9 @@ package store
 import (
 	"database/sql/driver"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type TaskPriority string
@@ -107,7 +107,7 @@ type Comment struct {
 	AuthorID  uuid.UUID
 	Content   string
 	Seq       int64
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type Event struct {
@@ -118,7 +118,7 @@ type Event struct {
 	EntityID  uuid.UUID
 	Payload   []byte
 	ActorID   uuid.UUID
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	Touches   []uuid.UUID
 }
 
@@ -128,8 +128,8 @@ type Project struct {
 	Description string
 	Metadata    []byte
 	Seq         int64
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Task struct {
@@ -143,8 +143,8 @@ type Task struct {
 	CustomFields []byte
 	Assignees    []uuid.UUID
 	UpdatedSeq   int64
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type TaskDependency struct {
@@ -156,5 +156,5 @@ type TaskDependency struct {
 type User struct {
 	ID          uuid.UUID
 	DisplayName string
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 }

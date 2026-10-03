@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/tjonty/collab-tasks/api/internal/apigen"
 	"github.com/tjonty/collab-tasks/api/internal/changes"
@@ -13,8 +14,10 @@ import (
 )
 
 // server implements the contract's operations. Handlers return errors
-// instead of error responses; respondError turns them into {code, message}.
+// instead of error responses, and respondError turns them into
+// {code, message}; the exception is a read's 404, which is a typed response.
 type server struct {
+	pool    *pgxpool.Pool
 	q       *store.Queries
 	changes *changes.Service
 }
@@ -66,17 +69,15 @@ func (s *server) CreateProject(ctx context.Context, req apigen.CreateProjectRequ
 	}
 	// Read back rather than echo the request: a retry gets the project as
 	// it was first created.
-	p, err := s.q.GetProject(ctx, b.Id)
+	row, err := s.q.GetProject(ctx, b.Id)
 	if err != nil {
 		return nil, err
 	}
-	var stored apigen.Metadata
-	if err := json.Unmarshal(p.Metadata, &stored); err != nil {
+	p, err := projectView(row)
+	if err != nil {
 		return nil, err
 	}
-	return apigen.CreateProject201JSONResponse{
-		Id: p.ID, Name: p.Name, Description: p.Description, Metadata: stored, Seq: p.Seq,
-	}, nil
+	return apigen.CreateProject201JSONResponse(p), nil
 }
 
 func (s *server) SubmitChange(ctx context.Context, req apigen.SubmitChangeRequestObject) (apigen.SubmitChangeResponseObject, error) {

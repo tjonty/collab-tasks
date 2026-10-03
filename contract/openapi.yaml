@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Collab Tasks API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     A real-time collaborative task manager.
 
@@ -10,8 +10,14 @@ info:
     one transaction and records it as one event, numbered by the project's
     `seq`. Only creating a user or a project uses another endpoint.
 
-    There is no login: requests carry `X-User-Id`, the id returned by
-    `POST /users`. This identifies, it does not authenticate.
+    Reads never bulk-load the heavy parts of a project: lists page through
+    compact task summaries, and a task's description, custom fields and
+    comments load when it is opened. Responses are gzip-compressed for
+    clients that accept it.
+
+    There is no login: every request except `POST /users` carries
+    `X-User-Id`, the id returned by `POST /users`. This identifies, it does
+    not authenticate.
 
     Generated code: `api/internal/apigen` (oapi-codegen) and
     `web/src/lib/api/schema.d.ts` (openapi-typescript).
@@ -20,6 +26,21 @@ servers:
 
 paths:
   /users:
+    get:
+      operationId: listUsers
+      summary: List users, for the assignee picker
+      security:
+        - userId: []
+      responses:
+        '200':
+          description: Every user, ordered by display name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     post:
       operationId: createUser
       summary: Pick a display name
@@ -38,6 +59,21 @@ paths:
         '503': { $ref: '#/components/responses/Unavailable' }
 
   /projects:
+    get:
+      operationId: listProjects
+      summary: List projects
+      security:
+        - userId: []
+      responses:
+        '200':
+          description: Every project, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProjectSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     post:
       operationId: createProject
       summary: Create a project
@@ -58,6 +94,139 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      summary: Open a project
+      description: |
+        Returns the project and its current `seq`. A client opening the
+        project subscribes to live events from this `seq`, then pages through
+        the task summaries.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /projects/{projectId}/tasks:
+    get:
+      operationId: listTasks
+      summary: Page through a project's task summaries
+      description: |
+        Ordered by id, which for UUIDv7 ids is creation order. Pass a page's
+        `nextCursor` as `after` to get the next one. Because the cursor is an
+        id, not an offset, edits, creates and deletes during paging never
+        make a page skip or repeat a task that exists throughout.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: after
+          in: query
+          description: The previous page's `nextCursor`. Omit it for the first page.
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          description: Page size, 1–500. Defaults to 500.
+          schema: { type: integer, format: int32, minimum: 1, maximum: 500, default: 500 }
+      responses:
+        '200':
+          description: One page of summaries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /projects/{projectId}/events:
+    get:
+      operationId: listEvents
+      summary: Read a project's event log
+      description: |
+        Events in `seq` order, starting after `after`. Used to catch up
+        without the WebSocket, and for tests and debugging.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: after
+          in: query
+          description: Return events with a greater `seq`. Defaults to 0, the start of the log.
+          schema: { type: integer, format: int64, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          description: Page size, 1–1,000. Defaults to 1,000.
+          schema: { type: integer, format: int32, minimum: 1, maximum: 1000, default: 1000 }
+      responses:
+        '200':
+          description: One page of events.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /tasks/{taskId}:
+    get:
+      operationId: getTask
+      summary: Open a task
+      description: |
+        The full task, including the heavy fields that summaries leave out.
+        Compare `updatedSeq` with the summary's to tell which is newer.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /tasks/{taskId}/comments:
+    get:
+      operationId: listComments
+      summary: Page through a task's comment thread
+      description: Oldest first, in `seq` order.
+      security:
+        - userId: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - name: afterSeq
+          in: query
+          description: The previous page's `nextCursor`. Defaults to 0, the start of the thread.
+          schema: { type: integer, format: int64, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          description: Page size, 1–100. Defaults to 50.
+          schema: { type: integer, format: int32, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: One page of comments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
@@ -105,6 +274,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     Unauthorized:
@@ -113,7 +287,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     NotFound:
-      description: '`project_not_found`'
+      description: '`project_not_found`, or `task_not_found` when reading a task.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -192,6 +366,18 @@ components:
           format: int64
           description: The number of the project's latest event.
 
+    ProjectSummary:
+      type: object
+      required: [id, name, description, seq]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        seq:
+          type: integer
+          format: int64
+          description: The number of the project's latest event.
+
     CreateProjectRequest:
       type: object
       required: [id, name]
@@ -257,6 +443,118 @@ components:
           items: { type: string }
           description: Up to 20 distinct tags of 1–30 characters.
         customFields: { $ref: '#/components/schemas/CustomFields' }
+
+    TaskSummary:
+      type: object
+      description: |
+        A task as lists show it. It leaves out the description and custom
+        fields, which load when the task is opened.
+      required: [id, title, status, priority, assignedTo, tags, dependencies, updatedSeq]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { $ref: '#/components/schemas/Priority' }
+        assignedTo:
+          type: array
+          items: { type: string, format: uuid }
+        tags:
+          type: array
+          items: { type: string }
+        dependencies:
+          type: array
+          items: { type: string, format: uuid }
+          description: Ids of the tasks this task depends on, ordered by id.
+        updatedSeq:
+          type: integer
+          format: int64
+          description: The project `seq` of this task's last change.
+
+    TaskPage:
+      type: object
+      required: [tasks, nextCursor, seq]
+      properties:
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/TaskSummary' }
+        nextCursor:
+          type: [string, 'null']
+          format: uuid
+          description: Pass as `after` to get the next page. `null` on the last page.
+        seq:
+          type: integer
+          format: int64
+          description: The project's `seq` when the page was read. The page shows the project exactly as of this `seq`.
+
+    TaskConfiguration:
+      type: object
+      required: [priority, description, tags, customFields]
+      properties:
+        priority: { $ref: '#/components/schemas/Priority' }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        customFields: { $ref: '#/components/schemas/CustomFields' }
+
+    Task:
+      type: object
+      required: [id, projectId, title, status, assignedTo, configuration, dependencies, updatedSeq]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/Status' }
+        assignedTo:
+          type: array
+          items: { type: string, format: uuid }
+        configuration: { $ref: '#/components/schemas/TaskConfiguration' }
+        dependencies:
+          type: array
+          items: { type: string, format: uuid }
+          description: Ids of the tasks this task depends on, ordered by id.
+        updatedSeq:
+          type: integer
+          format: int64
+          description: The project `seq` of this task's last change.
+
+    Comment:
+      type: object
+      required: [id, taskId, content, author, timestamp, seq]
+      properties:
+        id: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        content: { type: string }
+        author: { type: string, format: uuid, description: The id of the user who wrote it. }
+        timestamp: { type: string, format: date-time }
+        seq:
+          type: integer
+          format: int64
+          description: The project `seq` when the comment was posted. It sets the thread order.
+
+    CommentPage:
+      type: object
+      required: [comments, nextCursor]
+      properties:
+        comments:
+          type: array
+          items: { $ref: '#/components/schemas/Comment' }
+        nextCursor:
+          type: [integer, 'null']
+          format: int64
+          description: Pass as `afterSeq` to get the next page. `null` on the last page.
+
+    EventPage:
+      type: object
+      required: [events, nextCursor]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/Event' }
+        nextCursor:
+          type: [integer, 'null']
+          format: int64
+          description: Pass as `after` to get the next page. `null` once the page reaches the end of the log.
 
     SubmitChangeRequest:
       type: object
