@@ -1,4 +1,4 @@
-# Collab Tasks
+# Collab Tasks - HappyRobot Assessment
 
 [![CI](https://github.com/tjonty/collab-tasks/actions/workflows/ci.yml/badge.svg)](https://github.com/tjonty/collab-tasks/actions/workflows/ci.yml)
 
